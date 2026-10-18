@@ -44,6 +44,8 @@ namespace KinectHoard.App
             if (args.Length == 3 && args[0] == "--mesh-model") return ExportGeometry(args[2], StreamKind.Depth, true, ParseModel(args[1]));
             if (args.Length == 2 && args[0] == "--color-cloud") return ExportGeometry(args[1], StreamKind.ColorDepth, false);
             if (args.Length == 2 && args[0] == "--color-mesh") return ExportGeometry(args[1], StreamKind.ColorDepth, true);
+            if (args.Length == 3 && args[0] == "--color-cloud-model") return ExportGeometry(args[2], StreamKind.ColorDepth, false, ParseModel(args[1]));
+            if (args.Length == 3 && args[0] == "--color-mesh-model") return ExportGeometry(args[2], StreamKind.ColorDepth, true, ParseModel(args[1]));
             if (args.Length == 2 && args[0] == "--bodies") return ExportBodies(args[1]);
             if (args.Length == 3 && args[0] == "--bodies-model") return ExportBodies(args[2], ParseModel(args[1]));
             if (args.Length == 3 && args[0] == "--audio-record") return RecordAudio(args[1], int.Parse(args[2]));
@@ -979,7 +981,7 @@ namespace KinectHoard.App
                 lastReconnectError = null;
                 retryTimer.Stop();
                 timer.Start();
-                saveCloud.Enabled = SelectedStream() == StreamKind.Depth || (choice.Model == "one" && SelectedStream() == StreamKind.ColorDepth);
+                saveCloud.Enabled = SelectedStream() == StreamKind.Depth || SelectedStream() == StreamKind.ColorDepth;
                 SetStatus("Cámara abierta; esperando imagen...");
                 WriteLog(choice.Label + " | " + camera.BackendName + " | abierto");
             }
@@ -1166,7 +1168,6 @@ namespace KinectHoard.App
         private void SavePointCloud()
         {
             if (camera == null || (SelectedStream() != StreamKind.Depth && SelectedStream() != StreamKind.ColorDepth)) return;
-            if (SelectedStream() == StreamKind.ColorDepth && ((DeviceChoice)devices.SelectedItem).Model != "one") return;
             using (var dialog = new SaveFileDialog { Filter = "Nube de puntos PLY|*.ply", FileName = "kinect-cloud-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".ply", DefaultExt = "ply" })
                 if (dialog.ShowDialog(this) == DialogResult.OK)
                 {
@@ -1177,8 +1178,7 @@ namespace KinectHoard.App
 
         private void SaveMesh()
         {
-            if (camera == null || (SelectedStream() != StreamKind.Depth && SelectedStream() != StreamKind.ColorDepth) ||
-                (SelectedStream() == StreamKind.ColorDepth && ((DeviceChoice)devices.SelectedItem).Model != "one"))
+            if (camera == null || (SelectedStream() != StreamKind.Depth && SelectedStream() != StreamKind.ColorDepth))
             { SetStatus("Abre Profundidad de una Kinect para exportar una malla."); return; }
             using (var dialog = new SaveFileDialog { Filter = "Malla PLY|*.ply", FileName = "kinect-mesh-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".ply", DefaultExt = "ply" })
                 if (dialog.ShowDialog(this) == DialogResult.OK)
@@ -1192,7 +1192,7 @@ namespace KinectHoard.App
         {
             if (scanRunning) return;
             var choice = devices.SelectedItem as DeviceChoice;
-            if (choice == null || choice.Model != "one") { SetStatus("Fusion usa la Kinect One."); return; }
+            if (choice == null) { SetStatus("Selecciona una Kinect para Fusion."); return; }
             string root = AppDomain.CurrentDomain.BaseDirectory;
             if (!File.Exists(Path.Combine(root, "fusion.py")))
                 root = Path.GetFullPath(Path.Combine(root, "..", "..", "..", ".."));
@@ -1222,7 +1222,7 @@ namespace KinectHoard.App
                 {
                     var startInfo = new System.Diagnostics.ProcessStartInfo {
                         FileName = bundled ? bundledScanner : python,
-                        Arguments = (bundled ? "" : "\"" + script + "\" ") + "\"" + sessionPath + "\" \"" + meshPath + "\" --report \"" + reportPath + "\" --capture 15 --tracking auto",
+                        Arguments = (bundled ? "" : "\"" + script + "\" ") + "\"" + sessionPath + "\" \"" + meshPath + "\" --report \"" + reportPath + "\" --capture 15 --model " + choice.Model + " --tracking auto",
                         WorkingDirectory = workingRoot,
                         UseShellExecute = false, CreateNoWindow = true,
                         RedirectStandardOutput = true, RedirectStandardError = true,

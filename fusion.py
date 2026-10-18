@@ -186,7 +186,8 @@ def main() -> None:
                         help="Descarta el fondo más alejado antes de odometría y TSDF")
     parser.add_argument("--roi", type=int, nargs=4, metavar=("X", "Y", "W", "H"),
                         help="Recorta una región en píxeles de profundidad; el resto queda sin medida")
-    parser.add_argument("--capture", type=int, help="Graba primero segundos de ColorDepth con Kinect One")
+    parser.add_argument("--capture", type=int, help="Graba primero segundos de ColorDepth con la Kinect elegida")
+    parser.add_argument("--model", choices=("one", "360"), default="one", help="Modelo de Kinect para --capture")
     parser.add_argument("--voxel", type=float, default=0.01, help="Lado del vóxel en metros")
     parser.add_argument("--max-frames", type=int, default=120)
     args = parser.parse_args()
@@ -235,10 +236,10 @@ def main() -> None:
         if not exe.is_file():
             exe = root / "KinectHoard.App" / "bin" / "Release" / "net48" / "KinectHoard.App.exe"
         args.session.parent.mkdir(parents=True, exist_ok=True)
-        result = subprocess.run([str(exe), "--record", str(args.session), str(args.capture), "ColorDepth"],
+        result = subprocess.run([str(exe), "--record-model", args.model, str(args.session), str(args.capture), "ColorDepth"],
                                 timeout=args.capture + 30, capture_output=True)
         if result.returncode != 0:
-            raise RuntimeError(f"La Kinect One no produjo una sesión RGBD (código {result.returncode})")
+            raise RuntimeError(f"La Kinect {args.model} no produjo una sesión RGBD (código {result.returncode})")
     report_path = args.report or args.mesh.with_suffix(".fusion.json")
     result = fuse(args.session, args.mesh, report_path, args.voxel, args.tracking, args.max_frames,
                   args.foreground_max_depth, tuple(args.roi) if args.roi is not None else None)

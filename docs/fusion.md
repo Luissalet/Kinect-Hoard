@@ -1,6 +1,6 @@
-# Fusion RGBD y reconstrucción 3D en Kinect One
+# Fusion RGBD y reconstrucción 3D
 
-La demo graba simultáneamente color registrado y profundidad de la One en una sesión `.khr` de tipo `ColorDepth`. Guarda junto a ella `*.intrinsics.json` con la calibración de profundidad leída del sensor. `fusion.py` estima el movimiento entre fotogramas RGBD con odometría y los integra en un volumen TSDF; exporta una malla PLY con color y un informe JSON con las poses, el número de fotogramas aceptados y las pérdidas de seguimiento.
+La demo graba color registrado y profundidad de One o 360 en una sesión `.khr` de tipo `ColorDepth`. Guarda junto a ella `*.intrinsics.json` con la calibración de profundidad del sensor. `fusion.py` estima el movimiento entre fotogramas RGBD con odometría y los integra en un volumen TSDF; exporta una malla PLY con color y un informe JSON con las poses, el número de fotogramas aceptados y las pérdidas de seguimiento.
 
 ## Activación
 
@@ -14,12 +14,13 @@ Desde CLI, en la carpeta de Hoard:
 
 ```powershell
 & '.\KinectHoard.Fusion.exe' '.\escena.khr' '.\escena.ply' --capture 15 --tracking auto
+& '.\KinectHoard.Fusion.exe' '.\escena-360.khr' '.\escena-360.ply' --capture 15 --model 360 --tracking auto
 & '.\KinectHoard.Fusion.exe' '.\escena.khr' '.\otra-malla.ply' --tracking auto
 ```
 
-MCP ofrece `scan_3d(seconds, tracking)` y `fuse_session(filename, tracking)`. `auto` estima la pose con color y profundidad; `fixed` integra todos los fotogramas en una misma pose, útil para reducir ruido con el sensor inmóvil. Cuando la odometría falla o propone más de 25 cm / 25 grados entre fotogramas, se descarta ese fotograma y el informe incrementa `tracking_losses`.
+MCP ofrece `scan_3d(seconds, tracking, generation)` y `fuse_session(filename, tracking)`. `generation` selecciona `one` o `360`. `auto` estima la pose con color y profundidad; `fixed` integra todos los fotogramas en una misma pose, útil para reducir ruido con el sensor inmóvil. Cuando la odometría falla o propone más de 25 cm / 25 grados entre fotogramas, se descarta ese fotograma y el informe incrementa `tracking_losses`.
 
-Para aislar un objeto cercano o una cabeza ante una cámara fija, `--foreground-max-depth METROS` pone a cero el fondo lejano **antes** de la odometría y la integración. `--roi X Y W H` restringe además la imagen de profundidad (512×424 en One) a un rectángulo fijo. El informe conserva ambos parámetros. Ejemplo experimental, ajustando el rectángulo y el límite a la posición real del sujeto:
+Para aislar un objeto cercano o una cabeza ante una cámara fija, `--foreground-max-depth METROS` pone a cero el fondo lejano **antes** de la odometría y la integración. `--roi X Y W H` restringe además la imagen de profundidad (512×424 en One; 640×480 en 360) a un rectángulo fijo. El informe conserva ambos parámetros. Ejemplo experimental, ajustando el rectángulo y el límite a la posición real del sujeto:
 
 ```powershell
 & '.\KinectHoard.Fusion.exe' '.\cabeza.khr' '.\cabeza.ply' --capture 30 --tracking auto --foreground-max-depth 1.8 --roi 130 20 260 180
@@ -35,6 +36,10 @@ El PLY usa el sistema de coordenadas de Open3D respecto a la **primera cámara**
 
 Una captura real de la One de cinco segundos produjo siete fotogramas RGBD; los siete se integraron con odometría automática y se exportaron 122 682 vértices y 197 151 caras con color. En otra captura **estática**, cinco fotogramas dieron 118 612 vértices, 187 816 caras y una traslación estimada inferior a unos milímetros. La prueba automatizada sintética verifica que el TSDF no vuelva a quedar vacío.
 
+Con la 360 física y `libusbK`, una sesión de diez fotogramas RGBD estáticos se integró 10/10 con `fixed` y 10/10 con `auto`; este último produjo 84 164 vértices y 143 167 caras. Esto verifica captura, calibración, registro RGB y reconstrucción en una escena fija. No mide precisión ni reconstrucción alrededor del objeto.
+
 **Falta validar un escaneo de varias vistas con movimiento real del sensor u objeto**, medir deriva, recuperación tras pérdida de tracking y geometría de superficies ocultas. El modo de región y distancia se verificó con datos RGBD sintéticos, pero no con una cabeza. Tampoco hay cierre de bucle ni detección automática de cabeza. La One sigue usando Kinect Runtime 2.0 para adquirir los fotogramas; Open3D solo realiza la reconstrucción.
+
+El futuro modo de dos cámaras enfrentadas necesita calibración extrínseca, marcas temporales y fusión de ambas vistas. Su contrato y pruebas se describen en [escaneo dual](dual-scan.md); todavía no es una función operativa.
 
 Referencias de implementación: [integración TSDF](https://www.open3d.org/docs/latest/tutorial/pipelines/rgbd_integration.html), [odometría RGBD](https://www.open3d.org/docs/latest/tutorial/pipelines/rgbd_odometry.html) y [sesión Hoard](session.md).

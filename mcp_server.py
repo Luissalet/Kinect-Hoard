@@ -109,8 +109,8 @@ def capture_artifact(kind: str, generation: str = "one") -> dict[str, Any]:
         raise ValueError("kind debe ser uno de: " + ", ".join(options))
     if generation not in ("one", "360"):
         raise ValueError("generation debe ser 'one' o '360'")
-    if generation == "360" and kind not in ("color", "depth", "infrared", "point_cloud", "mesh"):
-        raise ValueError("La ruta nativa 360 solo admite color, profundidad, infrarrojos y geometría de profundidad")
+    if generation == "360" and kind not in ("color", "depth", "infrared", "registered_color", "point_cloud", "mesh", "color_cloud", "color_mesh"):
+        raise ValueError("La ruta nativa 360 admite RGB, profundidad, IR y geometría con o sin color")
     CAPTURE_DIR.mkdir(exist_ok=True)
     command, stream, suffix = options[kind]
     path = CAPTURE_DIR / f"{kind}-{datetime.now().strftime('%Y%m%d-%H%M%S-%f')}{suffix}"
@@ -301,11 +301,11 @@ def _foreground_options(max_depth: float | None, roi: list[int] | None) -> list[
 
 
 @mcp.tool()
-def scan_3d(seconds: int = 15, tracking: str = "auto",
+def scan_3d(seconds: int = 15, tracking: str = "auto", generation: str = "one",
             foreground_max_depth: float | None = None, roi: list[int] | None = None) -> dict[str, Any]:
-    """Record Kinect One synchronized RGBD and reconstruct a colored TSDF mesh locally."""
-    if not 2 <= seconds <= 60 or tracking not in ("auto", "fixed"):
-        raise ValueError("seconds debe estar entre 2 y 60 y tracking debe ser auto o fixed")
+    """Record synchronized RGBD from Kinect One or 360 and reconstruct a colored TSDF mesh locally."""
+    if not 2 <= seconds <= 60 or tracking not in ("auto", "fixed") or generation not in ("one", "360"):
+        raise ValueError("seconds debe estar entre 2 y 60, tracking auto/fixed y generation one/360")
     foreground_options = _foreground_options(foreground_max_depth, roi)
     CAPTURE_DIR.mkdir(exist_ok=True)
     stem = f"fusion-{datetime.now().strftime('%Y%m%d-%H%M%S-%f')}"
@@ -313,13 +313,13 @@ def scan_3d(seconds: int = 15, tracking: str = "auto",
     mesh = CAPTURE_DIR / f"{stem}.ply"
     report_path = CAPTURE_DIR / f"{stem}.fusion.json"
     result = subprocess.run([*_scan_command(), str(session), str(mesh),
-                             "--capture", str(seconds), "--tracking", tracking, "--report", str(report_path),
+                             "--capture", str(seconds), "--model", generation, "--tracking", tracking, "--report", str(report_path),
                              *foreground_options],
                             timeout=seconds + 120, capture_output=True)
     if result.returncode != 0 or not report_path.is_file():
         raise RuntimeError(f"Fusion falló (código {result.returncode}): {result.stderr.decode(errors='replace')[-500:]}")
     report = json.loads(report_path.read_text(encoding="utf-8"))
-    return {"session_path": str(session), "mesh_path": str(mesh), "report_path": str(report_path),
+    return {"generation": generation, "session_path": str(session), "mesh_path": str(mesh), "report_path": str(report_path),
             "frames_integrated": report["frames_integrated"], "tracking_losses": report["tracking_losses"],
             "vertices": report["vertices"], "triangles": report["triangles"],
             "foreground_max_depth_metres": report["foreground_max_depth_metres"],

@@ -19,7 +19,12 @@ typedef struct {
     freenect_context *context;
     freenect_device *device;
     uint8_t *latest;
+    uint8_t *latest_rgb;
+    uint8_t *snapshot_depth;
+    uint8_t *snapshot_rgb;
     int capacity;
+    int depth_bytes;
+    int rgb_bytes;
     int width;
     int height;
     int frame_bytes;
@@ -27,6 +32,10 @@ typedef struct {
     uint32_t timestamp;
     uint64_t sequence;
     uint64_t delivered;
+    uint64_t video_sequence;
+    uint64_t video_delivered;
+    int depth_started;
+    int video_started;
 #ifdef _WIN32
     HANDLE worker;
     CRITICAL_SECTION frame_lock;
@@ -54,11 +63,11 @@ static void set_error(char *target, int capacity, const char *message, int code)
 
 static void on_depth(freenect_device *device, void *data, uint32_t timestamp) {
     kh360_session *session = (kh360_session *)freenect_get_user(device);
-    if (!session || session->kind != 1) return;
+    if (!session || (session->kind != 1 && session->kind != 3)) return;
 #ifdef _WIN32
     EnterCriticalSection(&session->frame_lock);
 #endif
-    memcpy(session->latest, data, (size_t)session->frame_bytes);
+    memcpy(session->latest, data, (size_t)(session->kind == 3 ? session->depth_bytes : session->frame_bytes));
     session->timestamp = timestamp;
     session->sequence++;
 #ifdef _WIN32
@@ -72,9 +81,14 @@ static void on_video(freenect_device *device, void *data, uint32_t timestamp) {
 #ifdef _WIN32
     EnterCriticalSection(&session->frame_lock);
 #endif
-    memcpy(session->latest, data, (size_t)session->frame_bytes);
+    if (session->kind == 3) {
+        memcpy(session->latest_rgb, data, (size_t)session->rgb_bytes);
+        session->video_sequence++;
+    } else {
+        memcpy(session->latest, data, (size_t)session->frame_bytes);
+        session->sequence++;
+    }
     session->timestamp = timestamp;
-    session->sequence++;
 #ifdef _WIN32
     LeaveCriticalSection(&session->frame_lock);
 #endif
@@ -107,8 +121,8 @@ KH_API void kh360_close(kh360_session *session) {
     }
 #endif
     if (session->device) {
-        if (session->kind == 1) freenect_stop_depth(session->device);
-        else freenect_stop_video(session->device);
+        if (session->depth_started) freenect_stop_depth(session->device);
+        if (session->video_started) freenect_stop_video(session->device);
         freenect_close_device(session->device);
     }
     if (session->context) freenect_shutdown(session->context);
@@ -117,15 +131,18 @@ KH_API void kh360_close(kh360_session *session) {
     if (session->lock_initialized) DeleteCriticalSection(&session->frame_lock);
 #endif
     free(session->latest);
+    free(session->latest_rgb);
+    free(session->snapshot_depth);
+    free(session->snapshot_rgb);
     free(session);
 }
 
-// kind: 0 RGB, 1 depth in millimetres, 2 eight-bit infrared.
+// kind: 0 RGB, 1 depth in millimetres, 2 eight-bit infrared, 3 registered RGB + depth.
 KH_API kh360_session *kh360_open(int kind, int index, char *error, int error_capacity) {
     kh360_session *session;
     freenect_frame_mode mode;
     int rc;
-    if (kind < 0 || kind > 2) {
+    if (kind < 0 || kind > 3) {
         set_error(error, error_capacity, "Unsupported stream", kind);
         return NULL;
     }
@@ -163,10 +180,16 @@ KH_API kh360_session *kh360_open(int kind, int index, char *error, int error_cap
         return NULL;
     }
     freenect_set_user(session->device, session);
-    if (kind == 1) {
+    if (kind == 1 || kind == 3) {
         mode = freenect_find_depth_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_MM);
         rc = mode.is_valid ? freenect_set_depth_mode(session->device, mode) : -1;
         freenect_set_depth_callback(session->device, on_depth);
+        if (kind == 3 && rc >= 0) {
+            freenect_frame_mode rgb_mode = freenect_find_video_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_VIDEO_RGB);
+            rc = rgb_mode.is_valid ? freenect_set_video_mode(session->device, rgb_mode) : -1;
+            freenect_set_video_callback(session->device, on_video);
+            if (rc >= 0) session->rgb_bytes = rgb_mode.bytes;
+        }
     } else {
         mode = freenect_find_video_mode(FREENECT_RESOLUTION_MEDIUM,
             kind == 0 ? FREENECT_VIDEO_RGB : FREENECT_VIDEO_IR_8BIT);
@@ -180,19 +203,36 @@ KH_API kh360_session *kh360_open(int kind, int index, char *error, int error_cap
     }
     session->width = mode.width;
     session->height = mode.height;
-    session->frame_bytes = mode.bytes;
-    session->capacity = mode.bytes;
+    session->depth_bytes = (kind == 1 || kind == 3) ? mode.bytes : 0;
+    session->frame_bytes = kind == 3 ? mode.bytes + session->rgb_bytes : mode.bytes;
+    session->capacity = session->frame_bytes;
     session->latest = (uint8_t *)malloc((size_t)mode.bytes);
-    if (!session->latest) {
+    if (kind == 3) {
+        session->latest_rgb = (uint8_t *)malloc((size_t)session->rgb_bytes);
+        session->snapshot_depth = (uint8_t *)malloc((size_t)session->depth_bytes);
+        session->snapshot_rgb = (uint8_t *)malloc((size_t)session->rgb_bytes);
+    }
+    if (!session->latest || (kind == 3 && (!session->latest_rgb || !session->snapshot_depth || !session->snapshot_rgb))) {
         set_error(error, error_capacity, "Out of memory", -1);
         kh360_close(session);
         return NULL;
     }
-    rc = kind == 1 ? freenect_start_depth(session->device) : freenect_start_video(session->device);
+    rc = (kind == 1 || kind == 3) ? freenect_start_depth(session->device) : freenect_start_video(session->device);
     if (rc < 0) {
         set_error(error, error_capacity, "freenect_start_stream", rc);
         kh360_close(session);
         return NULL;
+    }
+    if (kind == 1 || kind == 3) session->depth_started = 1;
+    else session->video_started = 1;
+    if (kind == 3) {
+        rc = freenect_start_video(session->device);
+        if (rc < 0) {
+            set_error(error, error_capacity, "freenect_start_video", rc);
+            kh360_close(session);
+            return NULL;
+        }
+        session->video_started = 1;
     }
 #ifdef _WIN32
     InterlockedExchange(&session->running, 1);
@@ -213,7 +253,7 @@ KH_API int kh360_frame_bytes(const kh360_session *session) { return session ? se
 
 KH_API int kh360_depth_intrinsics(kh360_session *session, float *fx, float *fy) {
     double x, y;
-    if (!session || !session->device || !fx || !fy || session->kind != 1) return 0;
+    if (!session || !session->device || !fx || !fy || (session->kind != 1 && session->kind != 3)) return 0;
     freenect_camera_to_world(session->device, 321, 241, 1000, &x, &y);
     if (x <= 0 || y <= 0) return 0;
     *fx = (float)(1000.0 / x);
@@ -224,7 +264,7 @@ KH_API int kh360_depth_intrinsics(kh360_session *session, float *fx, float *fy) 
 KH_API int kh360_project_depth(kh360_session *session, const uint16_t *depth_mm,
     int count, float *xyz, int xyz_capacity) {
     int i;
-    if (!session || !session->device || session->kind != 1 || !depth_mm || !xyz ||
+    if (!session || !session->device || (session->kind != 1 && session->kind != 3) || !depth_mm || !xyz ||
         count != session->width * session->height || xyz_capacity < count * 3) return 0;
     for (i = 0; i < count; i++) {
         uint16_t z = depth_mm[i];
@@ -257,7 +297,8 @@ KH_API int kh360_read(kh360_session *session, uint8_t *target, int capacity, uin
         LeaveCriticalSection(&session->frame_lock);
         return error;
     }
-    if (session->sequence == session->delivered) {
+    if (session->sequence == session->delivered ||
+        (session->kind == 3 && session->video_sequence == session->video_delivered)) {
         LeaveCriticalSection(&session->frame_lock);
         return 0;
     }
@@ -266,13 +307,25 @@ KH_API int kh360_read(kh360_session *session, uint8_t *target, int capacity, uin
     wait_time.tv_usec = 20000;
     rc = freenect_process_events_timeout(session->context, &wait_time);
     if (rc < 0) return rc;
-    if (session->sequence == session->delivered) return 0;
+    if (session->sequence == session->delivered ||
+        (session->kind == 3 && session->video_sequence == session->video_delivered)) return 0;
 #endif
-    memcpy(target, session->latest, (size_t)session->frame_bytes);
+    if (session->kind == 3) {
+        memcpy(session->snapshot_depth, session->latest, (size_t)session->depth_bytes);
+        memcpy(session->snapshot_rgb, session->latest_rgb, (size_t)session->rgb_bytes);
+    } else {
+        memcpy(target, session->latest, (size_t)session->frame_bytes);
+    }
     if (timestamp) *timestamp = session->timestamp;
     session->delivered = session->sequence;
+    if (session->kind == 3) session->video_delivered = session->video_sequence;
 #ifdef _WIN32
     LeaveCriticalSection(&session->frame_lock);
 #endif
+    if (session->kind == 3) {
+        memcpy(target, session->snapshot_depth, (size_t)session->depth_bytes);
+        freenect_map_rgb_to_depth(session->device, (uint16_t *)session->snapshot_depth,
+            session->snapshot_rgb, target + session->depth_bytes);
+    }
     return 1;
 }

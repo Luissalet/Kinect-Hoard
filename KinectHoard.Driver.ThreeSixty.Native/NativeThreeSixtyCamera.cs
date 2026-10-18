@@ -42,7 +42,8 @@ namespace KinectHoard.Driver.ThreeSixty.Native
                 case StreamKind.Color: kind = 0; break;
                 case StreamKind.Depth: kind = 1; break;
                 case StreamKind.Infrared: kind = 2; break;
-                default: throw new NotSupportedException("El controlador nativo 360 admite color, profundidad e infrarrojos en este momento.");
+                case StreamKind.ColorDepth: kind = 3; break;
+                default: throw new NotSupportedException("El controlador nativo 360 admite color, profundidad, infrarrojos y RGB registrado a profundidad.");
             }
             var error = new StringBuilder(256);
             session = OpenNative(kind, 0, error, error.Capacity);
@@ -78,6 +79,15 @@ namespace KinectHoard.Driver.ThreeSixty.Native
                 Buffer.BlockCopy(raw, 0, values, 0, count * 2);
                 pixels = FrameRenderer.RenderDepth(values, pixels, 500, 4500);
             }
+            else if (stream == StreamKind.ColorDepth)
+            {
+                int depthBytes = checked(count * 2);
+                if (raw.Length < checked(depthBytes + count * 3))
+                    throw new InvalidOperationException("RGBD 360 incompleto.");
+                Buffer.BlockCopy(raw, 0, values, 0, depthBytes);
+                for (int i = 0, src = depthBytes, dst = 0; i < count; i++, src += 3, dst += 4)
+                { pixels[dst] = raw[src + 2]; pixels[dst + 1] = raw[src + 1]; pixels[dst + 2] = raw[src]; pixels[dst + 3] = 255; }
+            }
             else
             {
                 if (raw.Length < count) throw new InvalidOperationException("Infrarrojos 360 incompletos.");
@@ -92,20 +102,27 @@ namespace KinectHoard.Driver.ThreeSixty.Native
         public bool TryReadPointCloud(out PointCloudFrame frame)
         {
             frame = null;
-            if (stream != StreamKind.Depth || session == IntPtr.Zero)
+            if ((stream != StreamKind.Depth && stream != StreamKind.ColorDepth) || session == IntPtr.Zero)
                 throw new InvalidOperationException("Abre profundidad antes de pedir la nube de puntos.");
             CameraFrame depth;
             if (!TryRead(out depth)) return false;
             var xyz = new float[values.Length * 3];
             if (ProjectDepthNative(session, values, values.Length, xyz, xyz.Length) == 0)
                 throw new InvalidOperationException("No se pudo proyectar la profundidad con la calibración de fábrica.");
-            frame = new PointCloudFrame { Width = width, Height = height, Xyz = xyz };
+            byte[] rgb = null;
+            if (stream == StreamKind.ColorDepth)
+            {
+                rgb = new byte[checked(values.Length * 3)];
+                for (int i = 0, src = 0, dst = 0; i < values.Length; i++, src += 4, dst += 3)
+                { rgb[dst] = depth.Bgra[src + 2]; rgb[dst + 1] = depth.Bgra[src + 1]; rgb[dst + 2] = depth.Bgra[src]; }
+            }
+            frame = new PointCloudFrame { Width = width, Height = height, Xyz = xyz, Rgb = rgb };
             return true;
         }
 
         public DepthIntrinsics GetDepthIntrinsics()
         {
-            if (stream != StreamKind.Depth || width == 0) throw new InvalidOperationException("Abre profundidad primero.");
+            if ((stream != StreamKind.Depth && stream != StreamKind.ColorDepth) || width == 0) throw new InvalidOperationException("Abre profundidad primero.");
             float fx, fy;
             if (DepthIntrinsicsNative(session, out fx, out fy) == 0)
                 throw new InvalidOperationException("No se pudo leer la calibración de profundidad de la Kinect 360.");
