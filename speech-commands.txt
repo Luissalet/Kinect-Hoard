@@ -1,0 +1,7 @@
+# Comandos reconocidos por Kinect Hoard. Cambia la cultura y las frases según tu aplicación.
+culture=es-ES
+abrir color
+abrir profundidad
+abrir infrarrojos
+guardar imagen
+detener cámara

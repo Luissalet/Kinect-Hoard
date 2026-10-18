@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "id": "kinect-hoard",
+  "name": "Kinect Hoard",
+  "purpose": "Estudio local de cámaras, profundidad, seguimiento corporal, geometría y audio Kinect con código documentado para adaptar a otras aplicaciones.",
+  "capabilities": ["kinect-camera", "depth", "infrared", "body-tracking", "point-cloud", "audio", "diagnostics", "code-examples"],
+  "placeholders": ["KINECT_HOARD_DIR"],
+  "defaults": {},
+  "app": {
+    "ui_url": null,
+    "launch_hint": {
+      "kind": "process",
+      "executable": "powershell.exe",
+      "argv": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "{KINECT_HOARD_DIR}/launch-hoard.ps1"],
+      "cwd": "{KINECT_HOARD_DIR}"
+    }
+  },
+  "mcp": {
+    "transport": "stdio",
+    "command": "{KINECT_HOARD_DIR}/.venv/Scripts/python.exe",
+    "args": ["{KINECT_HOARD_DIR}/mcp_server.py"],
+    "env": {},
+    "optional_env": []
+  },
+  "notes": "Ejecuta setup-mcp.ps1 una vez en la carpeta instalada. El MCP es local y devuelve rutas de capturas; no sube imágenes ni datos a ninguna nube. Para abrir la UI, configura en Faustus el perfil de lanzamiento sugerido."
+}

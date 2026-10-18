@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Include="..\speech-commands.txt" Link="speech-commands.txt" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\models\haarcascade_frontalface_default.xml" Link="models\haarcascade_frontalface_default.xml" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="$(NuGetPackageRoot)opencvsharp4.runtime.win.slim\4.13.0.20260627\runtimes\win-x64\native\OpenCvSharpExtern.dll" Link="OpenCvSharpExtern.dll" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="$(NuGetPackageRoot)microsoft.kinect.face.x64\2.0.1410.19000\lib\net45\Microsoft.Kinect.Face.dll" Link="Microsoft.Kinect.Face.dll" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="$(NuGetPackageRoot)microsoft.kinect.face.x64\2.0.1410.19000\content\NuiDatabase\**\*" Link="NuiDatabase\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Runtime.Serialization" />
+    <Reference Include="System.Speech" />
+    <Reference Include="System.Web.Extensions" />
+    <ProjectReference Include="..\KinectHoard.Core\KinectHoard.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="OpenCvSharp4.Windows.Slim" Version="4.13.0.20260627" />
+  </ItemGroup>
+</Project>
