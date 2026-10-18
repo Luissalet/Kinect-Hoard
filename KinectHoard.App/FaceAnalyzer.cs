@@ -14,11 +14,11 @@ namespace KinectHoard.App
     {
         private static readonly string ModelPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "models", "haarcascade_frontalface_default.xml");
 
-        internal static int Capture(string reportPath, string imagePath)
+        internal static int Capture(string reportPath, string imagePath, string model = "one")
         {
             try
             {
-                using (var camera = Program.LoadBackend("one"))
+                using (var camera = Program.LoadBackend(model))
                 {
                     camera.Open(StreamKind.Color);
                     DateTime deadline = DateTime.UtcNow.AddSeconds(12);
@@ -27,12 +27,12 @@ namespace KinectHoard.App
                         CameraFrame frame;
                         if (camera.TryRead(out frame))
                         {
-                            using (var bitmap = FrameImage.Create(frame)) return Analyze(bitmap, reportPath, imagePath, "Kinect One");
+                            using (var bitmap = FrameImage.Create(frame)) return Analyze(bitmap, reportPath, imagePath, model == "one" ? "Kinect One" : "Kinect 360");
                         }
                         Thread.Sleep(30);
                     }
                 }
-                Console.Error.WriteLine("Rostro: no llegó una imagen RGB de la Kinect One.");
+                Console.Error.WriteLine("Rostro: no llegó una imagen RGB de la Kinect " + (model == "one" ? "One" : "360") + ".");
                 return 2;
             }
             catch (Exception ex) { Console.Error.WriteLine("Rostro: " + ex.GetBaseException().Message); return 1; }
@@ -44,9 +44,9 @@ namespace KinectHoard.App
             catch (Exception ex) { Console.Error.WriteLine("Rostro: " + ex.GetBaseException().Message); return 1; }
         }
 
-        internal static int AnalyzeBitmap(Bitmap bitmap, string reportPath, string imagePath)
+        internal static int AnalyzeBitmap(Bitmap bitmap, string reportPath, string imagePath, string source)
         {
-            try { return Analyze(bitmap, reportPath, imagePath, "Kinect One"); }
+            try { return Analyze(bitmap, reportPath, imagePath, source); }
             catch (Exception ex) { Console.Error.WriteLine("Rostro: " + ex.GetBaseException().Message); return 1; }
         }
 

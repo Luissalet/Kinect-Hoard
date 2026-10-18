@@ -2,7 +2,7 @@
 
 La One transforma un fotograma Depth con `CoordinateMapper.MapDepthFrameToCameraSpace`. Hoard conserva una tripleta XYZ por píxel, en **metros**. En el espacio de cámara de Kinect, X apunta a la derecha, Y hacia arriba y Z hacia delante. Las medidas de profundidad inválidas se omiten del PLY.
 
-La ruta nativa 360 convierte profundidad de libfreenect (milímetros) a XYZ mediante un modelo pinhole aproximado de 58,5° × 45,6°; no incorpora calibración individual ni distorsión. El backend SDK 1.8 alternativo usa `CoordinateMapper.MapDepthFrameToSkeletonFrame` cuando ese runtime reconoce el sensor. Se habilitaron nube y malla en la UI y los comandos `--point-cloud-model 360 salida.ply` y `--mesh-model 360 salida.ply`. El código compila, pero la cámara de este equipo aún está enlazada al controlador Microsoft y libfreenect no puede abrirla. La geometría 360 permanece **sin validación física**.
+La ruta nativa 360 convierte profundidad de libfreenect (milímetros) a XYZ mediante `freenect_camera_to_world`, que usa la calibración de fábrica leída del sensor. El backend SDK 1.8 alternativo usa `CoordinateMapper.MapDepthFrameToSkeletonFrame` cuando ese runtime reconoce el sensor. Se habilitaron nube y malla en la UI y los comandos `--point-cloud-model 360 salida.ply` y `--mesh-model 360 salida.ply`. Con la cámara física se exportó una nube de 234566 puntos válidos y una malla de una toma con 240490 vértices y 454653 caras. No se ha medido la precisión métrica con un patrón conocido.
 
 ```powershell
 & '.\KinectHoard.App\bin\Release\net48\KinectHoard.App.exe' --point-cloud '.\escena.ply'

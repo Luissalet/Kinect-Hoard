@@ -20,4 +20,4 @@ La API HTTP local de One está implementada y probada con profundidad; véase [s
 
 ## Pruebas cruzadas
 
-La Kinect 360 no está conectada a este equipo. Su RGB, profundidad e IR compilan; esqueleto, audio y capacidades superiores siguen pendientes. Cada función se valida por separado con el hardware correspondiente y una captura inspeccionable. Las demos originales del Toolkit se usan como referencia de comportamiento, sin copiar su código al paquete.
+La Kinect 360 está conectada a este equipo mediante libusbK solo en su cámara. RGB, profundidad, IR, nube y malla de una toma, grabación y reproducción se comprobaron con datos físicos; esqueleto, audio, registro RGB/profundidad, Fusion y capacidades superiores siguen pendientes. Cada función se valida por separado con el hardware correspondiente y una captura inspeccionable. Las demos originales del Toolkit se usan como referencia de comportamiento, sin copiar su código al paquete.

@@ -32,6 +32,7 @@ namespace KinectHoard.App
                 return CameraStreamServer.Run(int.Parse(args[2]), ParseStream(args[3]), int.Parse(args[4]), ParseModel(args[1]));
             if (args.Length == 4 && args[0] == "--face-image") return FaceAnalyzer.AnalyzeFile(args[1], args[2], args[3]);
             if (args.Length == 3 && args[0] == "--face-capture") return FaceAnalyzer.Capture(args[1], args[2]);
+            if (args.Length == 4 && args[0] == "--face-capture-model") return FaceAnalyzer.Capture(args[2], args[3], ParseModel(args[1]));
             if (args.Length == 4 && args[0] == "--face3d") return CaptureFace3D(args[1], args[2], int.Parse(args[3]));
             if (args.Length == 4 && args[0] == "--headscan") return CaptureFace3D(args[1], args[2], int.Parse(args[3]), true);
             if (args.Length == 3 && args[0] == "--gestures-session") return GestureDemo.AnalyzeSession(args[1], args[2]);
@@ -1349,7 +1350,8 @@ namespace KinectHoard.App
                 using (var image = (Bitmap)currentImage.Clone())
                 {
                     StopCamera();
-                    int result = FaceAnalyzer.AnalyzeBitmap(image, dialog.FileName, imagePath);
+                    int result = FaceAnalyzer.AnalyzeBitmap(image, dialog.FileName, imagePath,
+                        choice.Model == "one" ? "Kinect One" : "Kinect 360");
                     if (result != 0) { SetStatus("No se pudo analizar la imagen RGB."); return; }
                 }
                 var report = (Dictionary<string, object>)new JavaScriptSerializer().DeserializeObject(File.ReadAllText(dialog.FileName));

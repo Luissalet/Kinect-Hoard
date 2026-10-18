@@ -96,16 +96,9 @@ namespace KinectHoard.Driver.ThreeSixty.Native
                 throw new InvalidOperationException("Abre profundidad antes de pedir la nube de puntos.");
             CameraFrame depth;
             if (!TryRead(out depth)) return false;
-            var intrinsics = GetDepthIntrinsics();
             var xyz = new float[values.Length * 3];
-            for (int i = 0, j = 0; i < values.Length; i++, j += 3)
-            {
-                float z = values[i] / 1000f;
-                if (z <= 0 || z > 10) { xyz[j] = xyz[j + 1] = xyz[j + 2] = float.NaN; continue; }
-                xyz[j] = ((i % width) - intrinsics.Cx) * z / intrinsics.Fx;
-                xyz[j + 1] = (intrinsics.Cy - (i / width)) * z / intrinsics.Fy;
-                xyz[j + 2] = z;
-            }
+            if (ProjectDepthNative(session, values, values.Length, xyz, xyz.Length) == 0)
+                throw new InvalidOperationException("No se pudo proyectar la profundidad con la calibración de fábrica.");
             frame = new PointCloudFrame { Width = width, Height = height, Xyz = xyz };
             return true;
         }
@@ -113,14 +106,12 @@ namespace KinectHoard.Driver.ThreeSixty.Native
         public DepthIntrinsics GetDepthIntrinsics()
         {
             if (stream != StreamKind.Depth || width == 0) throw new InvalidOperationException("Abre profundidad primero.");
-            // Approximate factory field of view. A future calibration path should replace this estimate.
-            const double horizontalFov = 58.5 * Math.PI / 180.0;
-            const double verticalFov = 45.6 * Math.PI / 180.0;
+            float fx, fy;
+            if (DepthIntrinsicsNative(session, out fx, out fy) == 0)
+                throw new InvalidOperationException("No se pudo leer la calibración de profundidad de la Kinect 360.");
             return new DepthIntrinsics { Width = width, Height = height,
-                Fx = (float)(width / (2 * Math.Tan(horizontalFov / 2))),
-                Fy = (float)(height / (2 * Math.Tan(verticalFov / 2))),
-                Cx = (width - 1) / 2f, Cy = (height - 1) / 2f,
-                Method = "Approximate Kinect v1 depth field of view; not factory calibrated" };
+                Fx = fx, Fy = fy, Cx = width / 2f, Cy = height / 2f,
+                Method = "libfreenect factory zero-plane calibration" };
         }
 
         public void Close()
@@ -143,5 +134,9 @@ namespace KinectHoard.Driver.ThreeSixty.Native
         private static extern int FrameBytesNative(IntPtr session);
         [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "kh360_read")]
         private static extern int ReadNative(IntPtr session, [Out] byte[] target, int capacity, out uint timestamp);
+        [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "kh360_depth_intrinsics")]
+        private static extern int DepthIntrinsicsNative(IntPtr session, out float fx, out float fy);
+        [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "kh360_project_depth")]
+        private static extern int ProjectDepthNative(IntPtr session, [In] ushort[] depthMm, int count, [Out] float[] xyz, int xyzCapacity);
     }
 }
