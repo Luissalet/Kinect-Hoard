@@ -18,6 +18,8 @@ Prueba física del 18 de octubre de 2026: una persona delante de la One produjo 
 
 **Rostro > Analizar imagen RGB actual...** toma RGB, ejecuta un detector frontal Haar de OpenCV y guarda PNG con rectángulos y JSON. El flujo de cámara se detiene después; **Abrir cámara** vuelve al directo. MCP ofrece `analyze_face()` y devuelve rectángulos y rutas locales, sin adjuntar la fotografía.
 
+El análisis de la **imagen RGB actual** acepta One o 360 porque opera sobre píxeles ya capturados. La One se probó físicamente; la ruta 360 compila, pero aún no se pudo verificar por el bloqueo de su controlador. El comando `--face-capture` y la herramienta MCP siguen usando One.
+
 ```powershell
 & '.\KinectHoard.App\bin\Release\net48\KinectHoard.App.exe' --face-capture '.\rostro.json' '.\rostro.png'
 & '.\KinectHoard.App\bin\Release\net48\KinectHoard.App.exe' --face-image '.\foto.png' '.\resultado.json' '.\anotada.png'

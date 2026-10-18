@@ -15,6 +15,7 @@ namespace KinectHoard.App
     {
         private readonly object gate = new object();
         private readonly StreamKind stream;
+        private readonly string model;
         private byte[] image;
         private byte[] raw;
         private string frameJson;
@@ -22,13 +23,14 @@ namespace KinectHoard.App
         private DateTime lastFrameUtc;
         private long frameNumber;
 
-        private CameraStreamServer(StreamKind stream) { this.stream = stream; }
+        private CameraStreamServer(StreamKind stream, string model) { this.stream = stream; this.model = model; }
 
-        internal static int Run(int port, StreamKind stream, int seconds)
+        internal static int Run(int port, StreamKind stream, int seconds, string model = "one")
         {
             if (port < 1024 || port > 65535) throw new ArgumentOutOfRangeException("port");
             if (seconds < 0 || seconds > 86400) throw new ArgumentOutOfRangeException("seconds");
-            var server = new CameraStreamServer(stream);
+            if (model != "one" && model != "360") throw new ArgumentException("Modelo desconocido", "model");
+            var server = new CameraStreamServer(stream, model);
             DateTime until = seconds == 0 ? DateTime.MaxValue : DateTime.UtcNow.AddSeconds(seconds);
             using (var listener = new HttpListener())
             {
@@ -63,10 +65,11 @@ namespace KinectHoard.App
             {
                 while (DateTime.UtcNow < until)
                 {
-                    if (!UsbDiscovery.IsPresent("one"))
+                    var usb = UsbDiscovery.GetStatus(model);
+                    if (!usb.Usable)
                     {
                         if (camera != null) { camera.Dispose(); camera = null; }
-                        SetError("Kinect One ausente del USB.");
+                        SetError(usb.Description);
                         Thread.Sleep(500);
                         continue;
                     }
@@ -74,7 +77,7 @@ namespace KinectHoard.App
                     {
                         if (camera == null)
                         {
-                            camera = Program.LoadBackend("one");
+                            camera = Program.LoadBackend(model);
                             camera.Open(stream);
                             lastReceived = DateTime.UtcNow;
                             SetError(null);
@@ -151,7 +154,7 @@ namespace KinectHoard.App
                     string error; DateTime last; long sequence;
                     lock (gate) { error = lastError; last = lastFrameUtc; sequence = frameNumber; }
                     string json = new JavaScriptSerializer().Serialize(new Dictionary<string, object> {
-                        { "sensor", "one" }, { "usb_present", UsbDiscovery.IsPresent("one") },
+                        { "sensor", model }, { "usb_present", UsbDiscovery.IsPresent(model) },
                         { "stream", stream.ToString() }, { "frames", sequence },
                         { "streaming", last != DateTime.MinValue && (DateTime.UtcNow - last).TotalSeconds < 3 },
                         { "last_frame_utc", last == DateTime.MinValue ? null : last.ToString("O") }, { "error", error }

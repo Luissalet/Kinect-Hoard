@@ -1,0 +1,143 @@
+#include <libfreenect.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
+
+#ifdef _WIN32
+#define KH_API __declspec(dllexport)
+#else
+#define KH_API
+#endif
+
+typedef struct {
+    freenect_context *context;
+    freenect_device *device;
+    uint8_t *latest;
+    int capacity;
+    int width;
+    int height;
+    int frame_bytes;
+    int kind;
+    uint32_t timestamp;
+    uint64_t sequence;
+    uint64_t delivered;
+} kh360_session;
+
+static void set_error(char *target, int capacity, const char *message, int code) {
+    if (target && capacity > 0) {
+        snprintf(target, (size_t)capacity, "%s (%d)", message, code);
+        target[capacity - 1] = 0;
+    }
+}
+
+static void on_depth(freenect_device *device, void *data, uint32_t timestamp) {
+    kh360_session *session = (kh360_session *)freenect_get_user(device);
+    if (!session || session->kind != 1) return;
+    memcpy(session->latest, data, (size_t)session->frame_bytes);
+    session->timestamp = timestamp;
+    session->sequence++;
+}
+
+static void on_video(freenect_device *device, void *data, uint32_t timestamp) {
+    kh360_session *session = (kh360_session *)freenect_get_user(device);
+    if (!session || session->kind == 1) return;
+    memcpy(session->latest, data, (size_t)session->frame_bytes);
+    session->timestamp = timestamp;
+    session->sequence++;
+}
+
+KH_API void kh360_close(kh360_session *session) {
+    if (!session) return;
+    if (session->device) {
+        if (session->kind == 1) freenect_stop_depth(session->device);
+        else freenect_stop_video(session->device);
+        freenect_close_device(session->device);
+    }
+    if (session->context) freenect_shutdown(session->context);
+    free(session->latest);
+    free(session);
+}
+
+// kind: 0 RGB, 1 depth in millimetres, 2 eight-bit infrared.
+KH_API kh360_session *kh360_open(int kind, int index, char *error, int error_capacity) {
+    kh360_session *session;
+    freenect_frame_mode mode;
+    int rc;
+    if (kind < 0 || kind > 2) {
+        set_error(error, error_capacity, "Unsupported stream", kind);
+        return NULL;
+    }
+    session = (kh360_session *)calloc(1, sizeof(*session));
+    if (!session) {
+        set_error(error, error_capacity, "Out of memory", -1);
+        return NULL;
+    }
+    session->kind = kind;
+    rc = freenect_init(&session->context, NULL);
+    if (rc < 0) {
+        set_error(error, error_capacity, "freenect_init", rc);
+        kh360_close(session);
+        return NULL;
+    }
+    freenect_select_subdevices(session->context, FREENECT_DEVICE_CAMERA);
+    rc = freenect_open_device(session->context, &session->device, index);
+    if (rc < 0) {
+        set_error(error, error_capacity, "freenect_open_device; check libusbK on USB 045E:02AE", rc);
+        kh360_close(session);
+        return NULL;
+    }
+    freenect_set_user(session->device, session);
+    if (kind == 1) {
+        mode = freenect_find_depth_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_MM);
+        rc = mode.is_valid ? freenect_set_depth_mode(session->device, mode) : -1;
+        freenect_set_depth_callback(session->device, on_depth);
+    } else {
+        mode = freenect_find_video_mode(FREENECT_RESOLUTION_MEDIUM,
+            kind == 0 ? FREENECT_VIDEO_RGB : FREENECT_VIDEO_IR_8BIT);
+        rc = mode.is_valid ? freenect_set_video_mode(session->device, mode) : -1;
+        freenect_set_video_callback(session->device, on_video);
+    }
+    if (rc < 0) {
+        set_error(error, error_capacity, "freenect_set_mode", rc);
+        kh360_close(session);
+        return NULL;
+    }
+    session->width = mode.width;
+    session->height = mode.height;
+    session->frame_bytes = mode.bytes;
+    session->capacity = mode.bytes;
+    session->latest = (uint8_t *)malloc((size_t)mode.bytes);
+    if (!session->latest) {
+        set_error(error, error_capacity, "Out of memory", -1);
+        kh360_close(session);
+        return NULL;
+    }
+    rc = kind == 1 ? freenect_start_depth(session->device) : freenect_start_video(session->device);
+    if (rc < 0) {
+        set_error(error, error_capacity, "freenect_start_stream", rc);
+        kh360_close(session);
+        return NULL;
+    }
+    return session;
+}
+
+KH_API int kh360_width(const kh360_session *session) { return session ? session->width : 0; }
+KH_API int kh360_height(const kh360_session *session) { return session ? session->height : 0; }
+KH_API int kh360_frame_bytes(const kh360_session *session) { return session ? session->frame_bytes : 0; }
+
+// Returns 1 for a fresh frame, 0 while waiting, or a negative libusb error.
+KH_API int kh360_read(kh360_session *session, uint8_t *target, int capacity, uint32_t *timestamp) {
+    struct timeval wait_time;
+    int rc;
+    if (!session || !target || capacity < session->frame_bytes) return -100;
+    wait_time.tv_sec = 0;
+    wait_time.tv_usec = 20000;
+    rc = freenect_process_events_timeout(session->context, &wait_time);
+    if (rc < 0) return rc;
+    if (session->sequence == session->delivered) return 0;
+    memcpy(target, session->latest, (size_t)session->frame_bytes);
+    if (timestamp) *timestamp = session->timestamp;
+    session->delivered = session->sequence;
+    return 1;
+}

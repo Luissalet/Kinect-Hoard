@@ -88,7 +88,7 @@ def sensor_status() -> str:
 
 
 @mcp.tool()
-def capture_artifact(kind: str) -> dict[str, Any]:
+def capture_artifact(kind: str, generation: str = "one") -> dict[str, Any]:
     """Capture one local artifact. Returns its path only; image or body contents are not sent to the model."""
     options = {
         "color": ("--capture", "Color", ".png"),
@@ -107,31 +107,45 @@ def capture_artifact(kind: str) -> dict[str, Any]:
     }
     if kind not in options:
         raise ValueError("kind debe ser uno de: " + ", ".join(options))
+    if generation not in ("one", "360"):
+        raise ValueError("generation debe ser 'one' o '360'")
+    if generation == "360" and kind not in ("color", "depth", "infrared", "point_cloud", "mesh"):
+        raise ValueError("La ruta nativa 360 solo admite color, profundidad, infrarrojos y geometría de profundidad")
     CAPTURE_DIR.mkdir(exist_ok=True)
     command, stream, suffix = options[kind]
     path = CAPTURE_DIR / f"{kind}-{datetime.now().strftime('%Y%m%d-%H%M%S-%f')}{suffix}"
-    argv = [str(_exe()), command, str(path)]
+    if generation == "360":
+        command += "-model"
+        argv = [str(_exe()), command, generation, str(path)]
+    else:
+        argv = [str(_exe()), command, str(path)]
     if stream:
         argv.append(stream)
     result = subprocess.run(argv, timeout=35, capture_output=True)
     if result.returncode != 0 or not path.is_file():
         raise RuntimeError(f"La captura falló (código {result.returncode}); comprueba USB y que la cámara no esté ocupada")
-    return {"kind": kind, "path": str(path), "bytes": path.stat().st_size}
+    return {"kind": kind, "generation": generation, "path": str(path), "bytes": path.stat().st_size}
 
 
 @mcp.tool()
-def record_session(stream: str = "Depth", seconds: int = 10) -> dict[str, Any]:
+def record_session(stream: str = "Depth", seconds: int = 10, generation: str = "one") -> dict[str, Any]:
     """Record up to 60 seconds at 5 fps in a local .khr file for offline debugging."""
     allowed = {"Color", "Depth", "Infrared", "LongExposureInfrared", "BodyIndex", "Skeleton", "BackgroundRemoved", "ColorDepth"}
     if stream not in allowed or not 1 <= seconds <= 60:
         raise ValueError("stream o seconds no válidos")
+    if generation not in ("one", "360"):
+        raise ValueError("generation debe ser 'one' o '360'")
+    if generation == "360" and stream not in ("Color", "Depth", "Infrared"):
+        raise ValueError("La ruta nativa 360 solo graba Color, Depth o Infrared")
     CAPTURE_DIR.mkdir(exist_ok=True)
     path = CAPTURE_DIR / f"session-{stream.lower()}-{datetime.now().strftime('%Y%m%d-%H%M%S-%f')}.khr"
-    result = subprocess.run([str(_exe()), "--record", str(path), str(seconds), stream], timeout=seconds + 20, capture_output=True)
+    argv = [str(_exe()), "--record", str(path), str(seconds), stream] if generation == "one" else \
+        [str(_exe()), "--record-model", generation, str(path), str(seconds), stream]
+    result = subprocess.run(argv, timeout=seconds + 20, capture_output=True)
     if result.returncode != 0 or not path.is_file():
         raise RuntimeError(f"La grabación falló (código {result.returncode}); comprueba cámara y USB")
     metadata_path = path.with_suffix(".intrinsics.json")
-    return {"path": str(path), "bytes": path.stat().st_size, "stream": stream, "requested_seconds": seconds,
+    return {"path": str(path), "bytes": path.stat().st_size, "stream": stream, "generation": generation, "requested_seconds": seconds,
             "intrinsics_path": str(metadata_path) if metadata_path.is_file() else None}
 
 
@@ -166,17 +180,26 @@ def recognize_speech(seconds: int = 10) -> dict[str, Any]:
 
 
 @mcp.tool()
-def analyze_face() -> dict[str, Any]:
-    """Capture Kinect One RGB locally and return detected frontal face rectangles and artifact paths."""
+def analyze_face(generation: str = "one") -> dict[str, Any]:
+    """Capture RGB from One or 360 and return frontal face rectangles and local artifact paths."""
+    if generation not in ("one", "360"):
+        raise ValueError("generation debe ser 'one' o '360'")
     CAPTURE_DIR.mkdir(exist_ok=True)
     prefix = f"face-{datetime.now().strftime('%Y%m%d-%H%M%S-%f')}"
     report_path = CAPTURE_DIR / f"{prefix}.json"
     image_path = CAPTURE_DIR / f"{prefix}.png"
-    result = subprocess.run([str(_exe()), "--face-capture", str(report_path), str(image_path)], timeout=30, capture_output=True)
+    if generation == "one":
+        result = subprocess.run([str(_exe()), "--face-capture", str(report_path), str(image_path)], timeout=30, capture_output=True)
+    else:
+        source_path = CAPTURE_DIR / f"{prefix}-source.png"
+        capture = subprocess.run([str(_exe()), "--capture-model", "360", str(source_path), "Color"], timeout=35, capture_output=True)
+        if capture.returncode != 0 or not source_path.is_file():
+            raise RuntimeError(f"La captura RGB 360 falló (código {capture.returncode})")
+        result = subprocess.run([str(_exe()), "--face-image", str(source_path), str(report_path), str(image_path)], timeout=30, capture_output=True)
     if result.returncode != 0 or not report_path.is_file() or not image_path.is_file():
         raise RuntimeError(f"El análisis facial falló (código {result.returncode}); revisa el sensor y el modelo OpenCV")
     report = json.loads(report_path.read_text(encoding="utf-8"))
-    return {"report_path": str(report_path), "image_path": str(image_path), "width": report["width"], "height": report["height"], "faces": report["faces"]}
+    return {"generation": generation, "report_path": str(report_path), "image_path": str(image_path), "width": report["width"], "height": report["height"], "faces": report["faces"]}
 
 
 @mcp.tool()

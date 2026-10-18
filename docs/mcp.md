@@ -21,11 +21,11 @@ Faustus admite un manifiesto `faustus-plugin.json` junto a la aplicación. Este 
 | `get_capability(capability_id)` | Datos, muestras del Toolkit, rutas de código y documentación |
 | `read_hoard_source(relative_path)` | Código del catálogo y todos los Markdown de `docs/`; rechaza rutas ajenas al proyecto |
 | `sensor_status()` | Detección USB y backend sin iniciar un flujo |
-| `capture_artifact(kind)` | Crea PNG, PGM, JSON o PLY bajo `captures/` y devuelve la ruta |
-| `record_session(stream, seconds)` | Graba una sesión `.khr` local a 5 fps |
+| `capture_artifact(kind, generation)` | Crea PNG, PGM, JSON o PLY bajo `captures/` y devuelve la ruta; `generation` puede ser `one` o `360` |
+| `record_session(stream, seconds, generation)` | Graba una sesión `.khr` local a 5 fps; el backend nativo 360 admite Color, Depth e Infrared |
 | `record_audio(seconds)` | Intenta grabar WAV de One; devuelve error si el runtime no produce muestras |
 | `recognize_speech(seconds)` | Graba WAV local y devuelve eventos de comandos reconocidos, sin adjuntar el audio |
-| `analyze_face()` | Captura RGB de One y devuelve rectángulos faciales y rutas locales |
+| `analyze_face(generation)` | Captura RGB de One o 360 y devuelve rectángulos faciales y rutas locales |
 | `capture_face3d(seconds)` | Captura malla facial HD de One y devuelve rutas, calidad y recuentos, sin adjuntar geometría |
 | `scan_head(seconds)` | Intenta construir un modelo facial personalizado desde varias vistas; informa el estado de captura sin adjuntar geometría |
 | `capture_gestures(seconds)` | Captura esqueleto de One y devuelve eventos y ruta del informe |
@@ -35,6 +35,8 @@ Faustus admite un manifiesto `faustus-plugin.json` junto a la aplicación. Este 
 | `session_info(filename)` | Resume una sesión de `captures/` sin leer sus píxeles al modelo |
 
 El recurso `kinect-hoard://capabilities` ofrece el JSON completo y `kinect-hoard://toolkit-map` el mapa de adaptación. Los tipos de captura aceptados son `color`, `depth`, `infrared`, `long_infrared`, `body_index`, `skeleton_image`, `background_removed`, `registered_color`, `bodies`, `point_cloud`, `mesh`, `color_cloud` y `color_mesh`.
+
+`generation` vale `one` de forma predeterminada para mantener compatibles los clientes actuales. En la ruta nativa 360 solo están disponibles, por ahora, `color`, `depth`, `infrared`, `point_cloud` y `mesh`; MCP devuelve un error claro al pedir otra función. La prueba física 360 está pendiente del enlace libusbK.
 
 ## Contrato para un agente de implementación
 

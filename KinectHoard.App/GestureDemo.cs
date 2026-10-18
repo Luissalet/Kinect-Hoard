@@ -33,7 +33,7 @@ namespace KinectHoard.App
             catch (Exception ex) { Console.Error.WriteLine("Gestos: " + ex.GetBaseException().Message); return 1; }
         }
 
-        internal static int Capture(string reportPath, int seconds)
+        internal static int Capture(string reportPath, int seconds, string model = "one")
         {
             if (seconds < 1 || seconds > 120) return 1;
             ICameraBackend camera = null;
@@ -47,14 +47,14 @@ namespace KinectHoard.App
                 {
                     try
                     {
-                        if (!UsbDiscovery.IsPresent("one"))
+                        if (!UsbDiscovery.IsPresent(model))
                         {
                             if (camera != null) { camera.Dispose(); camera = null; }
                             Thread.Sleep(300); continue;
                         }
                         if (camera == null)
                         {
-                            camera = Program.LoadBackend("one");
+                            camera = Program.LoadBackend(model);
                             camera.Open(StreamKind.Skeleton);
                             lastFrame = DateTime.UtcNow;
                         }
@@ -77,7 +77,7 @@ namespace KinectHoard.App
                     }
                     Thread.Sleep(25);
                 }
-                Write(reportPath, "Kinect One", frames, trackedFrames, events);
+                Write(reportPath, model == "one" ? "Kinect One" : "Kinect 360", frames, trackedFrames, events);
                 return frames > 0 ? 0 : 2;
             }
             catch (Exception ex) { Console.Error.WriteLine("Gestos: " + ex.GetBaseException().Message); return 1; }

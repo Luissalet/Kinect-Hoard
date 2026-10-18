@@ -22,19 +22,29 @@ namespace KinectHoard.App
             if (args.Length == 2 && args[0] == "--diagnose") return Diagnose(args[1]);
             if (args.Length == 4 && args[0] == "--stress")
                 return Stress(args[1], int.Parse(args[2]), ParseStream(args[3]));
+            if (args.Length == 5 && args[0] == "--stress-model")
+                return Stress(args[2], int.Parse(args[3]), ParseStream(args[4]), ParseModel(args[1]));
+            if (args.Length == 5 && args[0] == "--stress-dual")
+                return StressDual(args[1], int.Parse(args[2]), ParseStream(args[3]), ParseStream(args[4]));
             if (args.Length == 4 && args[0] == "--webserver")
                 return CameraStreamServer.Run(int.Parse(args[1]), ParseStream(args[2]), int.Parse(args[3]));
+            if (args.Length == 5 && args[0] == "--webserver-model")
+                return CameraStreamServer.Run(int.Parse(args[2]), ParseStream(args[3]), int.Parse(args[4]), ParseModel(args[1]));
             if (args.Length == 4 && args[0] == "--face-image") return FaceAnalyzer.AnalyzeFile(args[1], args[2], args[3]);
             if (args.Length == 3 && args[0] == "--face-capture") return FaceAnalyzer.Capture(args[1], args[2]);
             if (args.Length == 4 && args[0] == "--face3d") return CaptureFace3D(args[1], args[2], int.Parse(args[3]));
             if (args.Length == 4 && args[0] == "--headscan") return CaptureFace3D(args[1], args[2], int.Parse(args[3]), true);
             if (args.Length == 3 && args[0] == "--gestures-session") return GestureDemo.AnalyzeSession(args[1], args[2]);
             if (args.Length == 3 && args[0] == "--gestures-live") return GestureDemo.Capture(args[1], int.Parse(args[2]));
+            if (args.Length == 4 && args[0] == "--gestures-live-model") return GestureDemo.Capture(args[2], int.Parse(args[3]), ParseModel(args[1]));
             if (args.Length == 2 && args[0] == "--point-cloud") return ExportPointCloud(args[1]);
             if (args.Length == 2 && args[0] == "--mesh") return ExportMesh(args[1]);
+            if (args.Length == 3 && args[0] == "--point-cloud-model") return ExportGeometry(args[2], StreamKind.Depth, false, ParseModel(args[1]));
+            if (args.Length == 3 && args[0] == "--mesh-model") return ExportGeometry(args[2], StreamKind.Depth, true, ParseModel(args[1]));
             if (args.Length == 2 && args[0] == "--color-cloud") return ExportGeometry(args[1], StreamKind.ColorDepth, false);
             if (args.Length == 2 && args[0] == "--color-mesh") return ExportGeometry(args[1], StreamKind.ColorDepth, true);
             if (args.Length == 2 && args[0] == "--bodies") return ExportBodies(args[1]);
+            if (args.Length == 3 && args[0] == "--bodies-model") return ExportBodies(args[2], ParseModel(args[1]));
             if (args.Length == 3 && args[0] == "--audio-record") return RecordAudio(args[1], int.Parse(args[2]));
             if (args.Length == 3 && args[0] == "--speech-recognize")
                 return SpeechCommands.RecognizeFile(args[1], args[2], Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "speech-commands.txt"));
@@ -46,17 +56,21 @@ namespace KinectHoard.App
                 return recorded == 0 ? recognized : 2;
             }
             if (args.Length == 4 && args[0] == "--record") return Record(args[1], int.Parse(args[2]), ParseStream(args[3]));
+            if (args.Length == 5 && args[0] == "--record-model")
+                return Record(args[2], int.Parse(args[3]), ParseStream(args[4]), ParseModel(args[1]));
             if (args.Length == 3 && args[0] == "--replay-last") return ReplayLast(args[1], args[2]);
             if (args.Length == 3 && args[0] == "--session-info") return SessionInfo(args[1], args[2]);
             if ((args.Length == 2 || args.Length == 3) && (args[0] == "--capture" || args[0] == "--capture-raw"))
                 return Capture(args[1], args.Length == 3 ? ParseStream(args[2]) : StreamKind.Color, args[0] == "--capture-raw");
+            if (args.Length == 4 && (args[0] == "--capture-model" || args[0] == "--capture-raw-model"))
+                return Capture(args[2], ParseStream(args[3]), args[0] == "--capture-raw-model", ParseModel(args[1]));
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             Application.Run(new MainForm());
             return 0;
         }
 
-        private static int Stress(string path, int seconds, StreamKind stream)
+        private static int Stress(string path, int seconds, StreamKind stream, string model = "one")
         {
             if (seconds < 1 || seconds > 600) throw new ArgumentOutOfRangeException("seconds");
             ICameraBackend backend = null;
@@ -68,18 +82,21 @@ namespace KinectHoard.App
             using (var writer = new StreamWriter(path, false))
             {
                 writer.AutoFlush = true;
-                writer.WriteLine("Kinect Hoard stress " + stream + " " + DateTime.Now.ToString("O"));
+                writer.WriteLine("Kinect Hoard stress " + model + " " + stream + " " + DateTime.Now.ToString("O"));
                 try
                 {
                     while (DateTime.UtcNow < end)
                     {
                         if (DateTime.UtcNow >= nextProbe)
                         {
-                            bool present = UsbDiscovery.IsPresent("one");
+                            var usbStatus = UsbDiscovery.GetStatus(model);
+                            bool present = usbStatus.Usable;
                             if (presentBefore && !present)
-                            { losses++; writer.WriteLine(DateTime.Now.ToString("HH:mm:ss.fff") + " USB absent"); }
+                            { losses++; writer.WriteLine(DateTime.Now.ToString("HH:mm:ss.fff") + " USB unavailable: " + usbStatus.Description); }
                             if (!presentBefore && present)
-                                writer.WriteLine(DateTime.Now.ToString("HH:mm:ss.fff") + " USB present");
+                                writer.WriteLine(DateTime.Now.ToString("HH:mm:ss.fff") + " USB ready: " + usbStatus.Description);
+                            if (!present && !presentBefore && frames == 0 && nextProbe == DateTime.MinValue)
+                                writer.WriteLine(DateTime.Now.ToString("HH:mm:ss.fff") + " USB unavailable: " + usbStatus.Description);
                             presentBefore = present;
                             nextProbe = DateTime.UtcNow.AddMilliseconds(500);
                         }
@@ -87,7 +104,7 @@ namespace KinectHoard.App
                         {
                             try
                             {
-                                backend = LoadBackend("one");
+                                backend = LoadBackend(model);
                                 backend.Open(stream);
                                 reopenings++;
                                 lastFrame = DateTime.UtcNow;
@@ -110,7 +127,7 @@ namespace KinectHoard.App
                                 {
                                     timeouts++;
                                     bool sensorObjectPresent = backend.IsAvailable; // Refresh Detail with the SDK state at the timeout.
-                                    writer.WriteLine(DateTime.Now.ToString("HH:mm:ss.fff") + " frame timeout; usb=" + UsbDiscovery.IsPresent("one") + "; sensor_object=" + sensorObjectPresent + "; detail=" + backend.Detail);
+                                    writer.WriteLine(DateTime.Now.ToString("HH:mm:ss.fff") + " frame timeout; usb=" + UsbDiscovery.IsPresent(model) + "; sensor_object=" + sensorObjectPresent + "; detail=" + backend.Detail);
                                     backend.Dispose(); backend = null;
                                 }
                             }
@@ -129,6 +146,16 @@ namespace KinectHoard.App
             return losses == 0 && frames > 0 && reopenings == 1 && timeouts == 0 ? 0 : 2;
         }
 
+        private static int StressDual(string directory, int seconds, StreamKind oneStream, StreamKind threeSixtyStream)
+        {
+            Directory.CreateDirectory(directory);
+            // Separate AppDomains and backend instances keep the v1 and v2 readers independent.
+            var one = Task.Run(() => Stress(Path.Combine(directory, "one.txt"), seconds, oneStream, "one"));
+            var threeSixty = Task.Run(() => Stress(Path.Combine(directory, "360.txt"), seconds, threeSixtyStream, "360"));
+            Task.WaitAll(one, threeSixty);
+            return one.Result == 0 && threeSixty.Result == 0 ? 0 : 2;
+        }
+
         private static int Diagnose(string path)
         {
             try
@@ -136,7 +163,8 @@ namespace KinectHoard.App
                 using (var writer = new StreamWriter(path, false))
                     foreach (string model in new[] { "one", "360" })
                     {
-                        writer.WriteLine(model + " USB=" + UsbDiscovery.IsPresent(model));
+                        var usb = UsbDiscovery.GetStatus(model);
+                        writer.WriteLine(model + " USB=" + usb.Usable + " detected=" + usb.Detected + " problem_code=" + usb.ProblemCode + " detail=" + usb.Description);
                         try
                         {
                             using (var backend = LoadBackend(model))
@@ -152,11 +180,11 @@ namespace KinectHoard.App
         private static int ExportPointCloud(string path) { return ExportGeometry(path, StreamKind.Depth, false); }
         private static int ExportMesh(string path) { return ExportGeometry(path, StreamKind.Depth, true); }
 
-        private static int ExportGeometry(string path, StreamKind stream, bool mesh)
+        private static int ExportGeometry(string path, StreamKind stream, bool mesh, string model = "one")
         {
             try
             {
-                using (var backend = LoadBackend("one"))
+                using (var backend = LoadBackend(model))
                 {
                     backend.Open(stream);
                     DateTime deadline = DateTime.UtcNow.AddSeconds(12);
@@ -184,11 +212,11 @@ namespace KinectHoard.App
             catch (Exception ex) { Console.Error.WriteLine("Geometría: " + ex.GetBaseException().Message); return 1; }
         }
 
-        private static int ExportBodies(string path)
+        private static int ExportBodies(string path, string model = "one")
         {
             try
             {
-                using (var backend = LoadBackend("one"))
+                using (var backend = LoadBackend(model))
                 {
                     backend.Open(StreamKind.Skeleton);
                     DateTime deadline = DateTime.UtcNow.AddSeconds(12);
@@ -284,7 +312,7 @@ namespace KinectHoard.App
             }
         }
 
-        private static int Record(string path, int seconds, StreamKind stream)
+        private static int Record(string path, int seconds, StreamKind stream, string model = "one")
         {
             if (seconds < 1 || seconds > 120) throw new ArgumentOutOfRangeException("seconds");
             int count = 0;
@@ -300,7 +328,7 @@ namespace KinectHoard.App
                     {
                         try
                         {
-                            if (!UsbDiscovery.IsPresent("one"))
+                            if (!UsbDiscovery.IsPresent(model))
                             {
                                 if (backend != null) { backend.Dispose(); backend = null; }
                                 Thread.Sleep(300);
@@ -308,7 +336,7 @@ namespace KinectHoard.App
                             }
                             if (backend == null)
                             {
-                                backend = LoadBackend("one");
+                                backend = LoadBackend(model);
                                 backend.Open(stream);
                                 lastFrame = DateTime.UtcNow;
                             }
@@ -408,8 +436,13 @@ namespace KinectHoard.App
 
         internal static ICameraBackend LoadBackend(string model)
         {
-            string name = model == "one" ? "KinectHoard.Driver.One" : "KinectHoard.Driver.ThreeSixty";
-            string type = model == "one" ? "KinectHoard.Driver.One.OneCamera" : "KinectHoard.Driver.ThreeSixty.ThreeSixtyCamera";
+            bool native360 = model == "360" &&
+                File.Exists(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "KinectHoard.Native360.dll"));
+            string name = model == "one" ? "KinectHoard.Driver.One" :
+                native360 ? "KinectHoard.Driver.ThreeSixty.Native" : "KinectHoard.Driver.ThreeSixty";
+            string type = model == "one" ? "KinectHoard.Driver.One.OneCamera" :
+                native360 ? "KinectHoard.Driver.ThreeSixty.Native.NativeThreeSixtyCamera" :
+                    "KinectHoard.Driver.ThreeSixty.ThreeSixtyCamera";
             string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, name + ".dll");
             if (!File.Exists(path)) throw new FileNotFoundException("Falta el controlador de la aplicación: " + name + ".dll");
             // v1 and v2 have the same assembly name. Separate AppDomains keep their CLR bindings apart.
@@ -557,7 +590,13 @@ namespace KinectHoard.App
             return stream;
         }
 
-        private static int Capture(string path, StreamKind stream, bool raw)
+        private static string ParseModel(string model)
+        {
+            if (model != "one" && model != "360") throw new ArgumentException("Modelo desconocido: " + model);
+            return model;
+        }
+
+        private static int Capture(string path, StreamKind stream, bool raw, string model = "one")
         {
             // A transient USB disconnect should not make a one-shot capture fail immediately.
             DateTime deadline = DateTime.UtcNow.AddSeconds(25);
@@ -566,8 +605,8 @@ namespace KinectHoard.App
             {
                 try
                 {
-                    if (!UsbDiscovery.IsPresent("one")) { Thread.Sleep(500); continue; }
-                    using (var backend = LoadBackend("one"))
+                    if (!UsbDiscovery.IsPresent(model)) { Thread.Sleep(500); continue; }
+                    using (var backend = LoadBackend(model))
                     {
                         backend.Open(stream);
                         DateTime frameDeadline = DateTime.UtcNow.AddSeconds(5);
@@ -585,7 +624,7 @@ namespace KinectHoard.App
                                 Console.WriteLine("Captura: " + frame.Width + "x" + frame.Height + " -> " + path);
                                 return 0;
                             }
-                            if (!UsbDiscovery.IsPresent("one")) break;
+                            if (!UsbDiscovery.IsPresent(model)) break;
                             Thread.Sleep(30);
                         }
                     }
@@ -775,6 +814,9 @@ namespace KinectHoard.App
             sessionMenu.DropDownItems.Add(stepPlaybackMenu);
             sessionMenu.DropDownItems.Add("Detener grabación", null, (s, e) => StopRecording());
             menu.Items.Add(sessionMenu);
+            var camerasMenu = new ToolStripMenuItem("Cámaras");
+            camerasMenu.DropDownItems.Add("Ver ambas a la vez...", null, (s, e) => OpenDualPreview());
+            menu.Items.Add(camerasMenu);
             var audioMenu = new ToolStripMenuItem("Audio y voz");
             audioMenu.DropDownItems.Add("Explorador: nivel y dirección...", null, (s, e) => OpenAudioMonitor());
             audioMenu.DropDownItems.Add("Grabar y reconocer 10 segundos...", null, async (s, e) => await CaptureSpeech());
@@ -859,7 +901,7 @@ namespace KinectHoard.App
             timer.Tick += (s, e) => PollFrame();
             retryTimer.Interval = 1500;
             retryTimer.Tick += (s, e) => RetryOpen();
-            Shown += (s, e) => { Scan(); devices.SelectedIndex = 0; OpenSelected(); };
+            Shown += (s, e) => { Scan(); if (devices.SelectedItem != null) OpenSelected(); };
             FormClosing += (s, e) => { closing = true; if (audioMonitor != null) audioMonitor.Close(); StopWebServer(false); StopScan(); StopFaceCapture(); StopCamera(); };
             LoadCapabilities();
             SetStatus("Esperando detección.");
@@ -872,8 +914,9 @@ namespace KinectHoard.App
             foreach (string model in new[] { "one", "360" })
             {
                 string label = model == "one" ? "Kinect One / v2" : "Kinect 360 / v1";
-                bool usb = false;
-                try { usb = UsbDiscovery.IsPresent(model); } catch (Exception ex) { WriteLog("USB: " + ex.Message); }
+                UsbDiscovery.DeviceStatus usbStatus = null;
+                try { usbStatus = UsbDiscovery.GetStatus(model); } catch (Exception ex) { WriteLog("USB: " + ex.Message); }
+                bool usb = usbStatus != null && usbStatus.Usable;
                 bool backendReady = false;
                 string detail;
                 try
@@ -882,8 +925,10 @@ namespace KinectHoard.App
                     { backendReady = driver.IsAvailable; detail = driver.Detail; }
                 }
                 catch (Exception ex) { detail = ex.GetBaseException().Message; }
-                WriteLog(label + " | USB " + (usb ? "detectado" : "ausente") + " | cámara " + (backendReady ? "disponible" : "no disponible") + " | " + detail);
-                devices.Items.Add(new DeviceChoice(model, label + (usb ? " · conectada" : " · sin conectar"), usb));
+                string usbDetail = usbStatus == null ? "no se pudo consultar PnP" : usbStatus.Description;
+                WriteLog(label + " | USB " + usbDetail + " | cámara " + (backendReady ? "disponible" : "no disponible") + " | " + detail);
+                string state = usb ? " · conectada" : usbStatus != null && usbStatus.Detected ? " · error controlador " + usbStatus.ProblemCode : " · sin conectar";
+                devices.Items.Add(new DeviceChoice(model, label + state, usb));
             }
             devices.SelectedIndex = ((DeviceChoice)devices.Items[0]).UsbPresent ? 0 : 1;
             SetStatus("Detección terminada. Selecciona una cámara.");
@@ -902,13 +947,30 @@ namespace KinectHoard.App
             TryOpenSelected();
         }
 
+        private void OpenDualPreview()
+        {
+            bool resume = wantsCamera;
+            StopCamera();
+            using (var dual = new DualPreviewForm()) dual.ShowDialog(this);
+            if (resume && !closing && !IsDisposed) OpenSelected();
+        }
+
         private void TryOpenSelected()
         {
             if (!wantsCamera || devices.SelectedItem == null) return;
             var choice = (DeviceChoice)devices.SelectedItem;
             try
             {
+                var usb = UsbDiscovery.GetStatus(choice.Model);
+                if (!usb.Usable)
+                {
+                    SetStatus("No se puede abrir la cámara: " + usb.Description);
+                    retryTimer.Start();
+                    return;
+                }
                 camera = Program.LoadBackend(choice.Model);
+                if (choice.Model == "360" && !camera.IsAvailable)
+                    throw new InvalidOperationException(camera.Detail);
                 camera.Open(SelectedStream());
                 frameCount = 0;
                 fpsSince = DateTime.UtcNow;
@@ -916,7 +978,7 @@ namespace KinectHoard.App
                 lastReconnectError = null;
                 retryTimer.Stop();
                 timer.Start();
-                saveCloud.Enabled = choice.Model == "one" && (SelectedStream() == StreamKind.Depth || SelectedStream() == StreamKind.ColorDepth);
+                saveCloud.Enabled = SelectedStream() == StreamKind.Depth || (choice.Model == "one" && SelectedStream() == StreamKind.ColorDepth);
                 SetStatus("Cámara abierta; esperando imagen...");
                 WriteLog(choice.Label + " | " + camera.BackendName + " | abierto");
             }
@@ -1102,7 +1164,8 @@ namespace KinectHoard.App
 
         private void SavePointCloud()
         {
-            if (camera == null || (SelectedStream() != StreamKind.Depth && SelectedStream() != StreamKind.ColorDepth) || ((DeviceChoice)devices.SelectedItem).Model != "one") return;
+            if (camera == null || (SelectedStream() != StreamKind.Depth && SelectedStream() != StreamKind.ColorDepth)) return;
+            if (SelectedStream() == StreamKind.ColorDepth && ((DeviceChoice)devices.SelectedItem).Model != "one") return;
             using (var dialog = new SaveFileDialog { Filter = "Nube de puntos PLY|*.ply", FileName = "kinect-cloud-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".ply", DefaultExt = "ply" })
                 if (dialog.ShowDialog(this) == DialogResult.OK)
                 {
@@ -1113,8 +1176,9 @@ namespace KinectHoard.App
 
         private void SaveMesh()
         {
-            if (camera == null || (SelectedStream() != StreamKind.Depth && SelectedStream() != StreamKind.ColorDepth) || ((DeviceChoice)devices.SelectedItem).Model != "one")
-            { SetStatus("Abre Profundidad o RGB + profundidad de Kinect One para exportar una malla."); return; }
+            if (camera == null || (SelectedStream() != StreamKind.Depth && SelectedStream() != StreamKind.ColorDepth) ||
+                (SelectedStream() == StreamKind.ColorDepth && ((DeviceChoice)devices.SelectedItem).Model != "one"))
+            { SetStatus("Abre Profundidad de una Kinect para exportar una malla."); return; }
             using (var dialog = new SaveFileDialog { Filter = "Malla PLY|*.ply", FileName = "kinect-mesh-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".ply", DefaultExt = "ply" })
                 if (dialog.ShowDialog(this) == DialogResult.OK)
                 {
@@ -1246,14 +1310,14 @@ namespace KinectHoard.App
             if (webServerProcess != null && !webServerProcess.HasExited) { SetStatus("El servidor local ya está iniciado."); return; }
             if (webServerProcess != null) { webServerProcess.Dispose(); webServerProcess = null; }
             var choice = devices.SelectedItem as DeviceChoice;
-            if (choice == null || choice.Model != "one") { SetStatus("El servidor local usa la Kinect One."); return; }
+            if (choice == null) { SetStatus("Selecciona una Kinect antes de iniciar el servidor."); return; }
             resumeCameraAfterWebServer = wantsCamera;
             StopCamera();
             try
             {
                 webServerProcess = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo {
                     FileName = Application.ExecutablePath,
-                    Arguments = "--webserver 8765 " + SelectedStream() + " 0",
+                    Arguments = "--webserver-model " + choice.Model + " 8765 " + SelectedStream() + " 0",
                     WorkingDirectory = AppDomain.CurrentDomain.BaseDirectory,
                     UseShellExecute = false,
                     CreateNoWindow = true,
@@ -1276,8 +1340,8 @@ namespace KinectHoard.App
         private void AnalyzeCurrentFace()
         {
             var choice = devices.SelectedItem as DeviceChoice;
-            if (choice == null || choice.Model != "one" || SelectedStream() != StreamKind.Color || currentImage == null)
-            { SetStatus("Abre Color RGB de la Kinect One antes de analizar rostros."); return; }
+            if (choice == null || SelectedStream() != StreamKind.Color || currentImage == null)
+            { SetStatus("Abre Color RGB de una Kinect antes de analizar rostros."); return; }
             using (var dialog = new SaveFileDialog { Filter = "Informe facial JSON|*.json", FileName = "kinect-face-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".json", DefaultExt = "json" })
             {
                 if (dialog.ShowDialog(this) != DialogResult.OK) return;

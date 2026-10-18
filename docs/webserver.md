@@ -1,11 +1,12 @@
-# Servidor local de la Kinect One
+# Servidor local de Kinect Hoard
 
-La demo **Servidor local** abre un lector de la One en un proceso separado y publica una vista web en `http://127.0.0.1:8765/`. Se limita a la interfaz local del equipo. En la aplicación, selecciona el flujo y usa **Servidor local > Iniciar vista web**; la cámara de escritorio se cierra mientras el servidor posee el lector. **Detener servidor** lo libera y reabre la vista de escritorio si estaba activa.
+La demo **Servidor local** abre un lector del modelo seleccionado en un proceso separado y publica una vista web en `http://127.0.0.1:8765/`. Se limita a la interfaz local del equipo. En la aplicación, selecciona el flujo y usa **Servidor local > Iniciar vista web**; la cámara de escritorio se cierra mientras el servidor posee el lector. **Detener servidor** lo libera y reabre la vista de escritorio si estaba activa. La One se verificó con hardware; la ruta 360 está implementada, pendiente de que Windows permita cargar su controlador.
 
 Para depurar desde PowerShell, el puerto, flujo y tiempo son parámetros del ejecutable. Un tiempo `0` deja el servidor activo hasta cerrar el proceso:
 
 ```powershell
 & '.\KinectHoard.App\bin\Release\net48\KinectHoard.App.exe' --webserver 8765 Depth 30
+& '.\KinectHoard.App\bin\Release\net48\KinectHoard.App.exe' --webserver-model 360 8765 Depth 30
 ```
 
 | Ruta | Respuesta |
