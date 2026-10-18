@@ -2,22 +2,22 @@
 
 ## Objetivo
 
-Una One y una 360 miran lados opuestos de un objeto o persona. Hoard captura las dos vistas en un intervalo corto y reconstruye una malla única en un sistema de coordenadas común. Esta capacidad está **planificada**: la vista dual ya abre dos lectores independientes, pero no existe aún captura RGBD conjunta, calibración entre sensores ni fusión de sus mallas. La prueba física simultánea también está pendiente.
+Una One y una 360 miran lados opuestos de un objeto o persona. Hoard captura las dos vistas en un intervalo corto y reconstruye una malla única en un sistema de coordenadas común. La captura RGBD paralela está implementada y compila; la fusión de dos sesiones con una transformación rígida dada pasó una prueba sintética. Falta medir los extrínsecos de estas cámaras, comprobar el funcionamiento físico simultáneo y validar la malla resultante. Véase el [escáner con textura](quality-scanner.md) para el comando y los archivos de salida.
 
 La 360 aporta otra línea de visión y puede cubrir superficies que la One no ve. La resolución y calidad de cada zona se han de medir sobre las capturas reales; unir dos sensores no crea automáticamente detalle donde ambos carecen de datos.
 
 ## Contrato de captura
 
-Cada sensor conserva su identificador, generación, intrínsecos de profundidad, mapa RGB registrado, profundidad original en milímetros, estado USB y tiempo de adquisición. Una sesión dual guarda los fotogramas en dos pistas independientes y registra las marcas temporales del host en el momento de recepción. Debe indicar si faltó un fotograma o hubo una reconexión, sin fabricar una pareja sincronizada. Los archivos `.khr` actuales guardan sesiones de una cámara; ampliar el formato exige versionarlo y mantener lectura de sesiones anteriores.
+Cada sensor conserva su generación, intrínsecos de profundidad, RGB registrado, profundidad original en milímetros y tiempo UTC de recepción. La captura dual actual escribe dos archivos `.khr` independientes y el informe calcula diferencia de inicio y segundos de solape. No combina fotogramas en parejas sincronizadas ni mide directamente los cortes USB en el informe de escaneo; para ello sigue disponible `--stress-dual`. La versión 2 del archivo conserva además el RGB original y su mapa en One.
 
 One y 360 no tienen en Hoard un disparo de hardware común. El primer modo utilizable será para un sujeto **inmóvil**: seleccionar parejas de fotogramas próximas por marca temporal y registrar la diferencia temporal real en el informe. Para movimiento, habrá que medir el desfase y la deformación y rechazar parejas que superen un umbral validado experimentalmente. No se debe prometer captura simultánea exacta.
 
 ## Calibración y fusión
 
 1. Medir los intrínsecos y el error de profundidad de cada sensor en su intervalo útil. Hoard ya guarda intrínsecos y proyección de fábrica; queda contrastarlos con un patrón físico.
-2. Obtener una transformación rígida `world_from_one` y `world_from_360` con un objeto de calibración visible desde ambos lados o con posiciones conocidas en una estructura rígida. Al estar enfrentadas, un tablero plano visto por una sola cara no basta. Guardar matrices 4×4, unidades en metros, método, fecha y error residual; rechazar calibraciones con error alto.
-3. Aplicar las transformaciones a las dos nubes. Filtrar profundidad inválida, bordes, píxeles sin color y puntos de baja confianza. Revisar en el visor la superposición antes de fusionar.
-4. Integrar las dos observaciones en un volumen TSDF común con pesos por confianza y visibilidad; resolver solapes sin duplicar superficies. Exportar PLY, informe y ambas sesiones originales para depuración y reproducción.
+2. Obtener una transformación rígida `world_from_second` con un objeto de calibración visible desde ambos lados o con posiciones conocidas en una estructura rígida. Al estar enfrentadas, un tablero plano visto por una sola cara no basta. `--calibrate` ajusta la matriz desde pares XYZ 3D y rechaza errores RMS superiores a 3 cm; falta seleccionar esos puntos desde el visor y medirlos en el hardware real.
+3. Aplicar la transformación a la segunda sesión, filtrar profundidad inválida y bordes, y revisar en el visor la superposición antes de aceptar el resultado. El filtrado y el informe existen; falta una vista de superposición previa a la fusión.
+4. Integrar las dos observaciones en un volumen TSDF común. La integración y exportación PLY/OBJ/PNG existen; faltan pesos explícitos por confianza de sensor y una prueba de solapes reales.
 
 El sistema de mundo puede fijarse en la One, pero esa elección debe constar en el informe. Los ejes de las nubes Hoard y el espacio pinhole usado por Open3D no son idénticos; la conversión debe hacerse explícita y verificarse con un objeto asimétrico para detectar reflejos o inversiones.
 

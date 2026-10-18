@@ -353,6 +353,138 @@ def fuse_session(filename: str, tracking: str = "auto",
 
 
 @mcp.tool()
+def scan_textured(seconds: int = 15, generation: str = "one", tracking: str = "auto",
+                  texture_size: int = 2048, max_triangles: int = 100_000) -> dict[str, Any]:
+    """Record One or 360 RGBD and export an OBJ, MTL, PNG atlas, PLY and quality report."""
+    if not 2 <= seconds <= 60 or generation not in ("one", "360") or tracking not in ("auto", "fixed"):
+        raise ValueError("seconds 2-60, generation one/360 y tracking auto/fixed")
+    if texture_size not in (1024, 2048, 4096):
+        raise ValueError("texture_size debe ser 1024, 2048 o 4096")
+    if not 10_000 <= max_triangles <= 1_000_000:
+        raise ValueError("max_triangles debe estar entre 10000 y 1000000")
+    CAPTURE_DIR.mkdir(exist_ok=True)
+    stem = f"textured-{datetime.now().strftime('%Y%m%d-%H%M%S-%f')}"
+    session = CAPTURE_DIR / f"{stem}.khr"
+    obj = CAPTURE_DIR / f"{stem}.obj"
+    report_path = CAPTURE_DIR / f"{stem}.scan.json"
+    result = subprocess.run([*_scan_command(), "--quality", str(session), str(obj),
+                             "--capture", str(seconds), "--model", generation,
+                             "--tracking", tracking, "--texture-size", str(texture_size),
+                             "--max-triangles", str(max_triangles),
+                             "--report", str(report_path)], timeout=seconds + 600, capture_output=True)
+    if result.returncode != 0 or not report_path.is_file():
+        raise RuntimeError(f"Escáner falló (código {result.returncode}): {result.stderr.decode(errors='replace')[-700:]}")
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    return {"generation": generation, "session_path": str(session), "obj_path": report["obj"],
+            "texture_path": report["texture"], "ply_path": report["ply"], "report_path": str(report_path),
+            "triangles": report["triangles"], "texture_observed_coverage": report["texture_observed_coverage"]}
+
+
+@mcp.tool()
+def scan_dual_textured(extrinsics_filename: str, seconds: int = 15,
+                       texture_size: int = 2048, max_triangles: int = 100_000) -> dict[str, Any]:
+    """Capture One and 360 concurrently and fuse a textured OBJ using measured extrinsics."""
+    if Path(extrinsics_filename).name != extrinsics_filename or not extrinsics_filename.endswith(".json"):
+        raise ValueError("Indica el nombre del JSON de calibración en captures/")
+    if not 2 <= seconds <= 60 or texture_size not in (1024, 2048, 4096):
+        raise ValueError("seconds 2-60 y texture_size 1024/2048/4096")
+    if not 10_000 <= max_triangles <= 1_000_000:
+        raise ValueError("max_triangles debe estar entre 10000 y 1000000")
+    extrinsics = CAPTURE_DIR / extrinsics_filename
+    if not extrinsics.is_file():
+        raise FileNotFoundError(extrinsics_filename)
+    stem = f"dual-{datetime.now().strftime('%Y%m%d-%H%M%S-%f')}"
+    one = CAPTURE_DIR / f"{stem}-one.khr"
+    three_sixty = CAPTURE_DIR / f"{stem}-360.khr"
+    obj = CAPTURE_DIR / f"{stem}.obj"
+    report_path = CAPTURE_DIR / f"{stem}.scan.json"
+    result = subprocess.run([*_scan_command(), "--quality", str(one), str(obj),
+                             "--second-session", str(three_sixty), "--extrinsics", str(extrinsics),
+                             "--capture-dual", str(seconds), "--tracking", "fixed",
+                             "--texture-size", str(texture_size), "--max-triangles", str(max_triangles),
+                             "--report", str(report_path)],
+                            timeout=seconds + 600, capture_output=True)
+    if result.returncode != 0 or not report_path.is_file():
+        raise RuntimeError(f"Escaneo dual falló (código {result.returncode}): {result.stderr.decode(errors='replace')[-700:]}")
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    return {"one_session_path": str(one), "360_session_path": str(three_sixty),
+            "obj_path": report["obj"], "texture_path": report["texture"],
+            "ply_path": report["ply"], "report_path": str(report_path),
+            "triangles": report["triangles"], "texture_observed_coverage": report["texture_observed_coverage"],
+            "capture_start_offset_seconds": report["capture_start_offset_seconds"],
+            "capture_overlap_seconds": report["capture_overlap_seconds"]}
+
+
+@mcp.tool()
+def calibrate_dual_landmarks(first_points_metres: list[list[float]],
+                             second_points_metres: list[list[float]],
+                             threshold_metres: float = 0.02) -> dict[str, Any]:
+    """Fit a rigid One <- 360 transform from corresponding measured XYZ landmarks."""
+    if len(first_points_metres) != len(second_points_metres) or not 4 <= len(first_points_metres) <= 100:
+        raise ValueError("Indica entre 4 y 100 pares de puntos XYZ")
+    if any(len(point) != 3 for point in [*first_points_metres, *second_points_metres]):
+        raise ValueError("Cada punto debe contener X, Y, Z en metros")
+    if not 0.005 <= threshold_metres <= 0.05:
+        raise ValueError("threshold_metres debe estar entre 0,005 y 0,05")
+    CAPTURE_DIR.mkdir(exist_ok=True)
+    stem = f"dual-calibration-{datetime.now().strftime('%Y%m%d-%H%M%S-%f')}"
+    landmarks = CAPTURE_DIR / f"{stem}-landmarks.json"
+    output = CAPTURE_DIR / f"{stem}.json"
+    landmarks.write_text(json.dumps({"format": "KINECT_HOARD_DUAL_LANDMARKS_1",
+                                     "first_points_metres": first_points_metres,
+                                     "second_points_metres": second_points_metres}), encoding="utf-8")
+    result = subprocess.run([*_scan_command(), "--calibrate", str(landmarks), str(output),
+                             "--threshold", str(threshold_metres)], timeout=30, capture_output=True)
+    if result.returncode != 0 or not output.is_file():
+        raise RuntimeError(f"Calibración falló: {result.stderr.decode(errors='replace')[-700:]}")
+    calibration = json.loads(output.read_text(encoding="utf-8"))
+    return {"calibration_filename": output.name, "calibration_path": str(output),
+            "landmarks_path": str(landmarks), "rms_error_metres": calibration["rms_error_metres"],
+            "inliers": calibration["inliers"], "landmarks": calibration["landmarks"],
+            "world_from_second": calibration["world_from_second"]}
+
+
+@mcp.tool()
+def fuse_textured_sessions(first_filename: str, second_filename: str = "",
+                           extrinsics_filename: str = "", tracking: str = "auto",
+                           texture_size: int = 2048, max_triangles: int = 100_000) -> dict[str, Any]:
+    """Texture one or two existing RGBD sessions in captures/; two need measured extrinsics JSON."""
+    for filename in (first_filename, second_filename):
+        if filename and (Path(filename).name != filename or not filename.endswith(".khr")):
+            raise ValueError("Las sesiones deben ser nombres .khr de captures/")
+    if not first_filename or tracking not in ("auto", "fixed") or texture_size not in (1024, 2048, 4096):
+        raise ValueError("Indica primera sesión, tracking auto/fixed y tamaño de textura válido")
+    if bool(second_filename) != bool(extrinsics_filename):
+        raise ValueError("Una segunda sesión requiere calibración extrínseca medida")
+    if not 10_000 <= max_triangles <= 1_000_000:
+        raise ValueError("max_triangles debe estar entre 10000 y 1000000")
+    if extrinsics_filename and (Path(extrinsics_filename).name != extrinsics_filename or not extrinsics_filename.endswith(".json")):
+        raise ValueError("Indica solo el nombre del JSON de extrínsecos en captures/")
+    sessions = [CAPTURE_DIR / first_filename] + ([CAPTURE_DIR / second_filename] if second_filename else [])
+    if any(not path.is_file() or not path.with_suffix(".intrinsics.json").is_file() for path in sessions):
+        raise FileNotFoundError("Falta una sesión RGBD o sus intrínsecos")
+    extrinsics = CAPTURE_DIR / extrinsics_filename if extrinsics_filename else None
+    if extrinsics is not None and not extrinsics.is_file():
+        raise FileNotFoundError(extrinsics_filename)
+    stem = f"textured-{datetime.now().strftime('%Y%m%d-%H%M%S-%f')}"
+    obj = CAPTURE_DIR / f"{stem}.obj"
+    report_path = CAPTURE_DIR / f"{stem}.scan.json"
+    command = [*_scan_command(), "--quality", str(sessions[0]), str(obj),
+               "--tracking", tracking, "--texture-size", str(texture_size),
+               "--max-triangles", str(max_triangles), "--report", str(report_path)]
+    if extrinsics is not None:
+        command.extend(("--second-session", str(sessions[1]), "--extrinsics", str(extrinsics)))
+    result = subprocess.run(command, timeout=600, capture_output=True)
+    if result.returncode != 0 or not report_path.is_file():
+        raise RuntimeError(f"Escáner falló (código {result.returncode}): {result.stderr.decode(errors='replace')[-700:]}")
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    return {"obj_path": report["obj"], "texture_path": report["texture"],
+            "ply_path": report["ply"], "report_path": str(report_path),
+            "triangles": report["triangles"], "texture_observed_coverage": report["texture_observed_coverage"],
+            "sessions": report["sessions"]}
+
+
+@mcp.tool()
 def session_info(filename: str) -> dict[str, Any]:
     """Summarize a locally recorded .khr session without returning any camera pixels."""
     if Path(filename).name != filename or not filename.endswith(".khr"):

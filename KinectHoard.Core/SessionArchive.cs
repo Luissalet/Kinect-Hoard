@@ -8,14 +8,16 @@ namespace KinectHoard.Core
     public sealed class SessionWriter : IDisposable
     {
         private readonly BinaryWriter writer;
+        private readonly bool qualityColor;
         public int FrameCount { get; private set; }
         public StreamKind Stream { get; private set; }
 
-        public SessionWriter(string path, StreamKind stream)
+        public SessionWriter(string path, StreamKind stream, bool qualityColor = false)
         {
             Stream = stream;
+            this.qualityColor = qualityColor;
             writer = new BinaryWriter(new GZipStream(new FileStream(path, FileMode.Create, FileAccess.Write), CompressionMode.Compress));
-            writer.Write("KINECT_HOARD_SESSION_1");
+            writer.Write(qualityColor ? "KINECT_HOARD_SESSION_2" : "KINECT_HOARD_SESSION_1");
             writer.Write((int)stream);
             writer.Write(DateTime.UtcNow.Ticks);
         }
@@ -48,6 +50,27 @@ namespace KinectHoard.Core
                         writer.Write(joint.TrackingState);
                     }
                 }
+            if (qualityColor)
+            {
+                int colorWidth = frame.FullColorWidth, colorHeight = frame.FullColorHeight;
+                byte[] fullColor = frame.FullColorBgra;
+                float[] mapX = frame.DepthToColorX, mapY = frame.DepthToColorY;
+                if (fullColor == null)
+                {
+                    colorWidth = colorHeight = 0;
+                    if (mapX != null || mapY != null) throw new InvalidDataException("Mapa RGB sin imagen original.");
+                }
+                else if (colorWidth < 1 || colorHeight < 1 || fullColor.Length != checked(colorWidth * colorHeight * 4) ||
+                         mapX == null || mapY == null || mapX.Length != frame.Width * frame.Height || mapY.Length != mapX.Length)
+                    throw new InvalidDataException("RGB original o mapa de color incompatible.");
+                writer.Write(colorWidth);
+                writer.Write(colorHeight);
+                writer.Write(fullColor == null ? 0 : fullColor.Length);
+                if (fullColor != null) writer.Write(fullColor);
+                writer.Write(mapX == null ? 0 : mapX.Length);
+                if (mapX != null)
+                    for (int i = 0; i < mapX.Length; i++) { writer.Write(mapX[i]); writer.Write(mapY[i]); }
+            }
             FrameCount++;
         }
 
@@ -57,15 +80,21 @@ namespace KinectHoard.Core
     public sealed class SessionReader : IDisposable
     {
         private readonly BinaryReader reader;
+        private readonly bool qualityColor;
         public StreamKind Stream { get; private set; }
         public DateTime StartedUtc { get; private set; }
+        public string Format { get; private set; }
 
         public SessionReader(string path)
         {
             reader = new BinaryReader(new GZipStream(new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read), CompressionMode.Decompress));
             try
             {
-                if (reader.ReadString() != "KINECT_HOARD_SESSION_1") throw new InvalidDataException("Archivo de sesión desconocido.");
+                string format = reader.ReadString();
+                if (format != "KINECT_HOARD_SESSION_1" && format != "KINECT_HOARD_SESSION_2")
+                    throw new InvalidDataException("Archivo de sesión desconocido.");
+                Format = format;
+                qualityColor = format == "KINECT_HOARD_SESSION_2";
                 int stream = reader.ReadInt32();
                 if (!Enum.IsDefined(typeof(StreamKind), stream)) throw new InvalidDataException("Flujo de sesión desconocido.");
                 Stream = (StreamKind)stream;
@@ -109,7 +138,34 @@ namespace KinectHoard.Core
                     };
                 if (bodies != null) bodies[i] = new TrackedBody { TrackingId = id, Joints = joints };
             }
-            frame = new CameraFrame { Kind = Stream, Width = width, Height = height, Bgra = pixels, Values = values, Bodies = bodies, TimestampUtc = new DateTime(ticks, DateTimeKind.Utc) };
+            int fullWidth = 0, fullHeight = 0;
+            byte[] fullColor = null;
+            float[] mapX = null, mapY = null;
+            if (qualityColor)
+            {
+                fullWidth = reader.ReadInt32(); fullHeight = reader.ReadInt32();
+                int colorLength = reader.ReadInt32();
+                if (colorLength < 0 || colorLength > 32_000_000 ||
+                    (colorLength == 0 ? fullWidth != 0 || fullHeight != 0 :
+                    fullWidth < 1 || fullHeight < 1 || (long)fullWidth * fullHeight * 4 != colorLength))
+                    throw new InvalidDataException("RGB original inválido.");
+                if (colorLength > 0)
+                {
+                    fullColor = reader.ReadBytes(colorLength);
+                    if (fullColor.Length != colorLength) throw new EndOfStreamException("RGB original incompleto.");
+                }
+                int mapCount = reader.ReadInt32();
+                if (mapCount != 0 && mapCount != width * height || (mapCount == 0) != (colorLength == 0))
+                    throw new InvalidDataException("Mapa RGB original inválido.");
+                if (mapCount > 0)
+                {
+                    mapX = new float[mapCount]; mapY = new float[mapCount];
+                    for (int i = 0; i < mapCount; i++) { mapX[i] = reader.ReadSingle(); mapY[i] = reader.ReadSingle(); }
+                }
+            }
+            frame = new CameraFrame { Kind = Stream, Width = width, Height = height, Bgra = pixels, Values = values,
+                Bodies = bodies, TimestampUtc = new DateTime(ticks, DateTimeKind.Utc), FullColorWidth = fullWidth,
+                FullColorHeight = fullHeight, FullColorBgra = fullColor, DepthToColorX = mapX, DepthToColorY = mapY };
             return true;
         }
 

@@ -23,6 +23,9 @@ namespace KinectHoard.Driver.One
         private ushort[] values;
         private byte[] bodyIndices;
         private StreamKind stream;
+        private bool qualityColor;
+
+        public void SetQualityColor(bool enabled) { qualityColor = enabled; }
 
         public string Model { get { return "Kinect One / v2"; } }
         public string BackendName { get { return "Microsoft Kinect Runtime 2.0"; } }
@@ -342,6 +345,16 @@ namespace KinectHoard.Driver.One
                     cloud = new PointCloudFrame { Width = width, Height = height, Xyz = xyz, Rgb = rgb };
                     image = new CameraFrame { Width = width, Height = height, Bgra = pixels, Values = values,
                         Kind = StreamKind.ColorDepth, TimestampUtc = DateTime.UtcNow };
+                    if (qualityColor)
+                    {
+                        image.FullColorWidth = colorWidth;
+                        image.FullColorHeight = colorHeight;
+                        image.FullColorBgra = rawColor;
+                        image.DepthToColorX = new float[count];
+                        image.DepthToColorY = new float[count];
+                        for (int i = 0; i < count; i++)
+                        { image.DepthToColorX[i] = depthToColor[i].X; image.DepthToColorY[i] = depthToColor[i].Y; }
+                    }
                     return true;
                 }
             }

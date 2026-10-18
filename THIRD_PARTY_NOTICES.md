@@ -1,9 +1,10 @@
-# Componentes de terceros del paquete Kinect Hoard One
+# Componentes de terceros del paquete Kinect Hoard
 
 - **OpenCvSharp4.Windows.Slim 4.13.0.20260627** (biblioteca administrada y `OpenCvSharpExtern.dll`): licencia Apache 2.0. Texto en `licenses/OpenCvSharp-LICENSE.txt`; proyecto: <https://github.com/shimat/opencvsharp>.
 - **OpenCV** (incluido por el paquete anterior): licencia Apache 2.0. Texto en `licenses/OpenCV-LICENSE.txt`; proyecto: <https://github.com/opencv/opencv>.
 - **haarcascade_frontalface_default.xml**: distribuye el aviso de licencia Intel en la cabecera del propio XML; origen: <https://github.com/opencv/opencv/blob/4.x/data/haarcascades/haarcascade_frontalface_default.xml>.
 - **Open3D 0.19.0** (incluido en `KinectHoard.Fusion.exe` y `_internal/`): licencia MIT. Texto en `licenses/Open3D-LICENSE.txt`; proyecto: <https://github.com/isl-org/Open3D>.
+- **xatlas-python 0.0.11** (despliegue UV del escáner con textura, incluido en el ejecutable): licencia MIT. Texto en `licenses/xatlas-LICENSE.txt`; proyecto: <https://github.com/mworchel/xatlas-python>.
 - **Python 3.12, NumPy, Plotly, Dash y dependencias transitivas**: incluidas en `_internal/` para ejecutar Fusion sin instalar Python. Los metadatos y textos de licencia disponibles se conservan en los directorios `*.dist-info` y archivos `*.LICENSE.txt` del paquete. El código y las licencias de cada distribución se identifican en <https://pypi.org/> y en sus metadatos incluidos.
 - **PyInstaller 6.22.3**: genera el ejecutable de Fusion; su [excepción de bootloader](https://pyinstaller.org/en/stable/license.html) permite distribuir la aplicación empaquetada. El procedimiento de compilación está en `build-scan.ps1`.
 - **Microsoft.Kinect.Face.x64 2.0.1410.19000** (`Microsoft.Kinect.Face.dll` y `NuiDatabase`): archivos de la fuente Face del Kinect SDK 2.0, publicados por KinectForWindowsTeam en [NuGet](https://www.nuget.org/packages/Microsoft.Kinect.Face.x64/2.0.1410.19000) y distribuidos para la función facial de Kinect One. Su uso está sujeto a los [términos del SDK 2.0 de Microsoft](https://download.microsoft.com/download/0/D/C/0DC5308E-36A7-4DCD-B299-B01CDFC8E345/Kinect-SDK2.0-EULA_en-US.pdf). Microsoft conserva sus derechos sobre estos archivos.

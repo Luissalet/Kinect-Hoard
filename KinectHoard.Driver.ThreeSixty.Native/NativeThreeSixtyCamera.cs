@@ -8,6 +8,7 @@ namespace KinectHoard.Driver.ThreeSixty.Native
     // This backend uses libfreenect and libusbK on the 360 camera, without Kinect SDK 1.8.
     public sealed class NativeThreeSixtyCamera : MarshalByRefObject, ICameraBackend
     {
+        public void SetQualityColor(bool enabled) { }
         private const string Library = "KinectHoard.Native360.dll";
         private IntPtr session;
         private StreamKind stream;

@@ -3,7 +3,7 @@ $ErrorActionPreference = 'Stop'
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 $scanExe = Join-Path $PSScriptRoot '.cache\scan-dist\KinectHoard.Fusion\KinectHoard.Fusion.exe'
 $scanRuntime = Join-Path $PSScriptRoot '.cache\scan-dist\KinectHoard.Fusion\_internal'
-$scanInputs = @('fusion.py', 'build-scan.ps1', 'setup-scan.ps1', 'requirements-scan.txt', 'requirements-scan-build.txt') |
+$scanInputs = @('fusion.py', 'quality_scan.py', 'dual_calibration.py', 'build-scan.ps1', 'setup-scan.ps1', 'requirements-scan.txt', 'requirements-scan-build.txt') |
     ForEach-Object { Join-Path $PSScriptRoot $_ }
 $needsScanBuild = -not (Test-Path -LiteralPath $scanExe) -or -not (Test-Path -LiteralPath $scanRuntime)
 if (-not $needsScanBuild) {
@@ -37,6 +37,8 @@ Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'setup-mcp.ps1') -Destination $s
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'launch-hoard.ps1') -Destination $stage
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'mcp_server.py') -Destination $stage
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'fusion.py') -Destination $stage
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'quality_scan.py') -Destination $stage
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'dual_calibration.py') -Destination $stage
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot '.cache\scan-dist\KinectHoard.Fusion\KinectHoard.Fusion.exe') -Destination $stage
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot '.cache\scan-dist\KinectHoard.Fusion\_internal') -Destination $stage -Recurse
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'build-scan.ps1') -Destination $stage

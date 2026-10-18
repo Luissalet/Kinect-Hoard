@@ -15,6 +15,7 @@ namespace KinectHoard.Core
         bool TryRead(out CameraFrame frame);
         bool TryReadPointCloud(out PointCloudFrame frame);
         DepthIntrinsics GetDepthIntrinsics();
+        void SetQualityColor(bool enabled);
         void Close();
     }
 
@@ -30,6 +31,13 @@ namespace KinectHoard.Core
         // Unmodified millimetres (depth) or 16-bit sensor intensity (infrared).
         public ushort[] Values { get; set; }
         public TrackedBody[] Bodies { get; set; }
+        // Optional original high-resolution RGB and depth-pixel-to-color mapping.
+        // Populated only for quality recording, to avoid copying it for live previews.
+        public int FullColorWidth { get; set; }
+        public int FullColorHeight { get; set; }
+        public byte[] FullColorBgra { get; set; }
+        public float[] DepthToColorX { get; set; }
+        public float[] DepthToColorY { get; set; }
     }
 
     [Serializable]

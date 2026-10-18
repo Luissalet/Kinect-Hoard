@@ -39,10 +39,12 @@ def dotnet_string(source: BinaryIO) -> str:
     raise ValueError("Longitud de texto inválida")
 
 
-def frames(path: Path) -> Iterator[tuple[int, int, int, bytes, bytes]]:
+def frames(path: Path, with_quality: bool = False) -> Iterator[tuple]:
     with gzip.open(path, "rb") as source:
-        if dotnet_string(source) != "KINECT_HOARD_SESSION_1":
+        version = dotnet_string(source)
+        if version not in ("KINECT_HOARD_SESSION_1", "KINECT_HOARD_SESSION_2"):
             raise ValueError("Formato de sesión desconocido")
+        quality = version == "KINECT_HOARD_SESSION_2"
         if int32(source) != COLOR_DEPTH_STREAM:
             raise ValueError("Fusion requiere una sesión ColorDepth")
         exact(source, 8)  # UTC start ticks
@@ -63,7 +65,25 @@ def frames(path: Path) -> Iterator[tuple[int, int, int, bytes, bytes]]:
             depth = exact(source, value_count * 2)
             if int32(source) != 0:
                 raise ValueError("La sesión ColorDepth contiene cuerpos inesperados")
-            yield timestamp, width, height, bgra, depth
+            full_width = full_height = 0
+            full_color = mapping = b""
+            if quality:
+                full_width, full_height = int32(source), int32(source)
+                full_length = int32(source)
+                if full_length < 0 or full_length > 32_000_000 or (
+                    full_length == 0 and (full_width != 0 or full_height != 0) or
+                    full_length > 0 and (full_width < 1 or full_height < 1 or full_width * full_height * 4 != full_length)
+                ):
+                    raise ValueError("RGB original inválido")
+                full_color = exact(source, full_length)
+                map_count = int32(source)
+                if map_count not in (0, width * height) or bool(map_count) != bool(full_length):
+                    raise ValueError("Mapa RGB original inválido")
+                mapping = exact(source, map_count * 8)
+            if with_quality:
+                yield timestamp, width, height, bgra, depth, full_width, full_height, full_color, mapping
+            else:
+                yield timestamp, width, height, bgra, depth
 
 
 def fuse(session: Path, output: Path, report_path: Path, voxel: float, tracking: str, max_frames: int,
@@ -175,10 +195,20 @@ def fuse(session: Path, output: Path, report_path: Path, voxel: float, tracking:
 
 
 def main() -> None:
+    if "--calibrate" in sys.argv[1:]:
+        sys.argv.remove("--calibrate")
+        from dual_calibration import main as calibration_main
+        calibration_main()
+        return
+    if "--quality" in sys.argv[1:]:
+        sys.argv.remove("--quality")
+        from quality_scan import main as quality_main
+        quality_main()
+        return
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("session", type=Path, nargs="?", help="Sesión .khr de ColorDepth")
     parser.add_argument("mesh", type=Path, nargs="?", help="Malla PLY de salida")
-    parser.add_argument("--view", type=Path, help="Abre una malla PLY en el visor 3D interactivo")
+    parser.add_argument("--view", type=Path, help="Abre una malla PLY u OBJ con textura en el visor 3D")
     parser.add_argument("--raw-colors", action="store_true", help="Muestra colores originales sin realce de vista previa")
     parser.add_argument("--report", type=Path, help="Informe JSON (por defecto junto a la malla)")
     parser.add_argument("--tracking", choices=("auto", "fixed"), default="auto")

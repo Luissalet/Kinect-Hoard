@@ -10,7 +10,7 @@ La [detección frontal 2D](face.md) localizó un rostro humano en RGB de 1920×1
 
 ## Fusion y escaneo 3D (`KinectFusion*`, `HeadScanning`)
 
-La [demo Fusion de One](fusion.md) ya registra poses entre fotogramas RGBD, integra un volumen TSDF y exporta una malla PLY con color. Se probó con la Kinect física **inmóvil**; falta validar movimiento alrededor de un objeto, medir deriva y recuperación tras pérdida de tracking, cierre de bucle, texturización UV y medidas físicas conocidas. La UI guarda el informe de seguimiento y abre la malla en un visor 3D interactivo; aún no ofrece reinicio interactivo del volumen. El escaneo de cabeza añade segmentación y consentimiento explícito para exportar geometría facial.
+La [demo Fusion](fusion.md) registra poses entre fotogramas RGBD, integra un volumen TSDF y exporta PLY con color. El [escáner de calidad](quality-scanner.md) añade cierre de bucle cercano, UV y atlas PNG en OBJ. La 360 física produjo una textura de escena inmóvil; One y dos sensores juntos solo pasan pruebas sintéticas de estas funciones nuevas. Falta validar movimiento alrededor de un objeto, medir deriva y recuperación tras pérdida de tracking, calibrar cámaras enfrentadas y medir dimensiones conocidas. La UI guarda informes y abre las mallas; aún no ofrece reinicio interactivo del volumen. El escaneo de cabeza añade segmentación y consentimiento explícito para exportar geometría facial.
 
 ## Interacción (`AdaptiveUI`, `ControlsBasics`, `InteractionGallery`, `ShapeGame`, `TicTacToe`)
 
@@ -20,4 +20,4 @@ La API HTTP local de One está implementada y probada con profundidad; véase [s
 
 ## Pruebas cruzadas
 
-La Kinect 360 está conectada a este equipo mediante libusbK solo en su cámara. RGB, profundidad, IR, nube y malla de una toma, grabación y reproducción se comprobaron con datos físicos; esqueleto, audio, registro RGB/profundidad, Fusion y capacidades superiores siguen pendientes. Cada función se valida por separado con el hardware correspondiente y una captura inspeccionable. Las demos originales del Toolkit se usan como referencia de comportamiento, sin copiar su código al paquete.
+La Kinect 360 está conectada a este equipo mediante libusbK solo en su cámara. RGB, profundidad, IR, RGBD registrado, nube, malla, grabación, reproducción y escáner OBJ con textura de una escena estática se comprobaron con datos físicos. Siguen pendientes el esqueleto y audio 360 independientes del SDK 1.8, el barrido real de varias vistas y la captura dual física. Cada función se valida por separado con el hardware correspondiente y una captura inspeccionable. Las demos originales del Toolkit se usan como referencia de comportamiento, sin copiar su código al paquete.

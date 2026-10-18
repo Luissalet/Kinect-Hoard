@@ -61,6 +61,12 @@ namespace KinectHoard.App
             if (args.Length == 4 && args[0] == "--record") return Record(args[1], int.Parse(args[2]), ParseStream(args[3]));
             if (args.Length == 5 && args[0] == "--record-model")
                 return Record(args[2], int.Parse(args[3]), ParseStream(args[4]), ParseModel(args[1]));
+            if (args.Length == 5 && args[0] == "--record-quality-model")
+                return Record(args[2], int.Parse(args[3]), ParseStream(args[4]), ParseModel(args[1]), true);
+            if (args.Length == 5 && args[0] == "--record-dual")
+                return RecordDual(args[1], args[2], int.Parse(args[3]), ParseStream(args[4]));
+            if (args.Length == 5 && args[0] == "--record-dual-quality")
+                return RecordDual(args[1], args[2], int.Parse(args[3]), ParseStream(args[4]), true);
             if (args.Length == 3 && args[0] == "--replay-last") return ReplayLast(args[1], args[2]);
             if (args.Length == 3 && args[0] == "--session-info") return SessionInfo(args[1], args[2]);
             if ((args.Length == 2 || args.Length == 3) && (args[0] == "--capture" || args[0] == "--capture-raw"))
@@ -315,15 +321,16 @@ namespace KinectHoard.App
             }
         }
 
-        private static int Record(string path, int seconds, StreamKind stream, string model = "one")
+        private static int Record(string path, int seconds, StreamKind stream, string model = "one", bool quality = false)
         {
             if (seconds < 1 || seconds > 120) throw new ArgumentOutOfRangeException("seconds");
+            if (quality && stream != StreamKind.ColorDepth) throw new ArgumentException("La sesión de calidad requiere ColorDepth.");
             int count = 0;
             ICameraBackend backend = null;
             DateTime end = DateTime.UtcNow.AddSeconds(seconds);
             DateTime nextSample = DateTime.MinValue;
             DateTime lastFrame = DateTime.UtcNow;
-            using (var writer = new SessionWriter(path, stream))
+            using (var writer = new SessionWriter(path, stream, quality))
             {
                 try
                 {
@@ -344,11 +351,13 @@ namespace KinectHoard.App
                                 lastFrame = DateTime.UtcNow;
                             }
                             CameraFrame frame;
+                            bool sampleReady = DateTime.UtcNow >= nextSample;
+                            if (quality) backend.SetQualityColor(sampleReady);
                             if (backend.TryRead(out frame))
                             {
                                 lastFrame = DateTime.UtcNow;
                                 if (stream == StreamKind.ColorDepth && count == 0) WriteDepthMetadata(path, backend);
-                                if (DateTime.UtcNow >= nextSample)
+                                if (sampleReady)
                                 {
                                     writer.WriteFrame(frame);
                                     count++;
@@ -370,6 +379,19 @@ namespace KinectHoard.App
             }
             Console.WriteLine("Sesión: " + count + " fotogramas -> " + path);
             return count > 0 ? 0 : 2;
+        }
+
+        private static int RecordDual(string onePath, string threeSixtyPath, int seconds, StreamKind stream, bool quality = false)
+        {
+            if (stream != StreamKind.ColorDepth) throw new ArgumentException("El escáner dual requiere ColorDepth.");
+            if (Path.GetFullPath(onePath).Equals(Path.GetFullPath(threeSixtyPath), StringComparison.OrdinalIgnoreCase))
+                throw new ArgumentException("Las dos sesiones necesitan rutas distintas.");
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(onePath)));
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(threeSixtyPath)));
+            var one = Task.Run(() => Record(onePath, seconds, stream, "one", quality));
+            var threeSixty = Task.Run(() => Record(threeSixtyPath, seconds, stream, "360", quality));
+            Task.WaitAll(one, threeSixty);
+            return one.Result == 0 && threeSixty.Result == 0 ? 0 : 2;
         }
 
         internal static void WriteDepthMetadata(string sessionPath, ICameraBackend backend)
@@ -411,10 +433,12 @@ namespace KinectHoard.App
                 int count = 0, width = 0, height = 0, maxBodies = 0;
                 DateTime first = DateTime.MinValue, last = DateTime.MinValue, started;
                 StreamKind stream;
+                string format;
                 using (var reader = new SessionReader(sessionPath))
                 {
                     started = reader.StartedUtc;
                     stream = reader.Stream;
+                    format = reader.Format;
                     CameraFrame frame;
                     while (reader.TryRead(out frame))
                     {
@@ -425,7 +449,7 @@ namespace KinectHoard.App
                     }
                 }
                 var info = new Dictionary<string, object> {
-                    { "format", "KINECT_HOARD_SESSION_1" }, { "stream", stream.ToString() },
+                    { "format", format }, { "stream", stream.ToString() },
                     { "started_utc", started.ToString("O") }, { "frames", count },
                     { "first_frame_utc", count == 0 ? null : first.ToString("O") },
                     { "last_frame_utc", count == 0 ? null : last.ToString("O") },
@@ -653,6 +677,7 @@ namespace KinectHoard.App
         public bool TryRead(out CameraFrame frame) { return inner.TryRead(out frame); }
         public bool TryReadPointCloud(out PointCloudFrame frame) { return inner.TryReadPointCloud(out frame); }
         public DepthIntrinsics GetDepthIntrinsics() { return inner.GetDepthIntrinsics(); }
+        public void SetQualityColor(bool enabled) { inner.SetQualityColor(enabled); }
         public void Close() { inner.Close(); }
         public void Dispose()
         {
@@ -836,7 +861,9 @@ namespace KinectHoard.App
             var geometryMenu = new ToolStripMenuItem("Geometría");
             geometryMenu.DropDownItems.Add("Exportar malla PLY...", null, (s, e) => SaveMesh());
             geometryMenu.DropDownItems.Add("Fusion: escanear 15 segundos...", null, async (s, e) => await Scan3D());
-            geometryMenu.DropDownItems.Add("Ver malla PLY...", null, (s, e) => OpenMeshViewer());
+            geometryMenu.DropDownItems.Add("Escáner con textura OBJ (15 segundos)...", null, async (s, e) => await Scan3D(true));
+            geometryMenu.DropDownItems.Add("Escaneo dual con calibración (15 segundos)...", null, async (s, e) => await Scan3D(true, true));
+            geometryMenu.DropDownItems.Add("Ver malla PLY u OBJ...", null, (s, e) => OpenMeshViewer());
             menu.Items.Add(geometryMenu);
             var gestureMenu = new ToolStripMenuItem("Gestos");
             gestureMenu.DropDownItems.Add(liveGestures);
@@ -1188,11 +1215,20 @@ namespace KinectHoard.App
                 }
         }
 
-        private async Task Scan3D()
+        private async Task Scan3D(bool quality = false, bool dual = false)
         {
             if (scanRunning) return;
             var choice = devices.SelectedItem as DeviceChoice;
-            if (choice == null) { SetStatus("Selecciona una Kinect para Fusion."); return; }
+            if (!dual && choice == null) { SetStatus("Selecciona una Kinect para escanear."); return; }
+            if (dual && (!UsbDiscovery.IsPresent("one") || !UsbDiscovery.IsPresent("360")))
+            { SetStatus("El escaneo dual necesita One y 360 conectadas a la vez."); return; }
+            string extrinsicsPath = null;
+            if (dual)
+                using (var calibration = new OpenFileDialog { Filter = "Calibración dual JSON|*.json", Title = "Elige la calibración medida entre One y 360" })
+                {
+                    if (calibration.ShowDialog(this) != DialogResult.OK) return;
+                    extrinsicsPath = calibration.FileName;
+                }
             string root = AppDomain.CurrentDomain.BaseDirectory;
             if (!File.Exists(Path.Combine(root, "fusion.py")))
                 root = Path.GetFullPath(Path.Combine(root, "..", "..", "..", ".."));
@@ -1203,7 +1239,7 @@ namespace KinectHoard.App
             if (!bundled && (!File.Exists(script) || !File.Exists(python)))
             { SetStatus("Falta Fusion. Ejecuta setup-scan.ps1 o usa el ZIP completo de Hoard."); return; }
             string meshPath;
-            using (var dialog = new SaveFileDialog { Filter = "Malla PLY|*.ply", FileName = "kinect-fusion-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".ply", DefaultExt = "ply" })
+            using (var dialog = new SaveFileDialog { Filter = quality ? "Malla con textura OBJ|*.obj" : "Malla PLY|*.ply", FileName = (quality ? "kinect-scan-" : "kinect-fusion-") + DateTime.Now.ToString("yyyyMMdd-HHmmss") + (quality ? ".obj" : ".ply"), DefaultExt = quality ? "obj" : "ply" })
             {
                 if (dialog.ShowDialog(this) != DialogResult.OK) return;
                 meshPath = dialog.FileName;
@@ -1211,18 +1247,25 @@ namespace KinectHoard.App
             bool resumeCamera = wantsCamera;
             StopCamera();
             scanRunning = true;
-            SetStatus("Fusion: grabando 15 segundos de RGB y profundidad; después reconstruirá la malla...");
+            SetStatus(dual ? "Escáner dual: grabando las dos cámaras; después alineará y texturizará..." :
+                quality ? "Escáner: grabando 15 segundos RGBD; después generará malla y textura OBJ..." :
+                "Fusion: grabando 15 segundos de RGB y profundidad; después reconstruirá la malla...");
             try
             {
                 string sessionPath = Path.Combine(Path.GetDirectoryName(meshPath),
                     Path.GetFileNameWithoutExtension(meshPath) + "-" + Guid.NewGuid().ToString("N") + ".khr");
-                string reportPath = Path.ChangeExtension(meshPath, ".fusion.json");
+                string secondSessionPath = dual ? Path.Combine(Path.GetDirectoryName(meshPath),
+                    Path.GetFileNameWithoutExtension(meshPath) + "-360-" + Guid.NewGuid().ToString("N") + ".khr") : null;
+                string reportPath = Path.ChangeExtension(meshPath, quality ? ".scan.json" : ".fusion.json");
                 string workingRoot = root;
                 var result = await Task.Run(() =>
                 {
                     var startInfo = new System.Diagnostics.ProcessStartInfo {
                         FileName = bundled ? bundledScanner : python,
-                        Arguments = (bundled ? "" : "\"" + script + "\" ") + "\"" + sessionPath + "\" \"" + meshPath + "\" --report \"" + reportPath + "\" --capture 15 --model " + choice.Model + " --tracking auto",
+                        Arguments = (bundled ? "" : "\"" + script + "\" ") + (quality ? "--quality " : "") +
+                            "\"" + sessionPath + "\" \"" + meshPath + "\" --report \"" + reportPath + "\" " +
+                            (dual ? "--second-session \"" + secondSessionPath + "\" --extrinsics \"" + extrinsicsPath + "\" --capture-dual 15 --tracking fixed" :
+                                "--capture 15 --model " + choice.Model + " --tracking auto"),
                         WorkingDirectory = workingRoot,
                         UseShellExecute = false, CreateNoWindow = true,
                         RedirectStandardOutput = true, RedirectStandardError = true,
@@ -1239,16 +1282,20 @@ namespace KinectHoard.App
                 });
                 if (result.Item1 != 0) throw new InvalidOperationException(result.Item3.Trim());
                 var report = (Dictionary<string, object>)new JavaScriptSerializer().DeserializeObject(File.ReadAllText(reportPath));
-                WriteLog("Fusion: " + report["frames_integrated"] + " fotogramas, " + report["triangles"] + " caras; " + meshPath);
-                SetStatus("Malla 3D guardada: " + report["triangles"] + " caras.");
+                if (quality)
+                    WriteLog("Escáner: " + report["triangles"] + " caras, textura " + report["texture_width"] + "×" + report["texture_height"] + "; " + meshPath);
+                else
+                    WriteLog("Fusion: " + report["frames_integrated"] + " fotogramas, " + report["triangles"] + " caras; " + meshPath);
+                SetStatus((quality ? "Malla OBJ y textura guardadas: " : "Malla 3D guardada: ") + report["triangles"] + " caras.");
+                if (dual) WriteLog("Escáner dual: solape temporal " + report["capture_overlap_seconds"] + " s; " + secondSessionPath);
                 OpenMeshViewer(meshPath);
             }
             catch (Exception ex)
             {
                 if (!IsDisposed && !Disposing)
                 {
-                    WriteLog("Fusion: " + ex.GetBaseException().Message);
-                    SetStatus("Fusion no pudo completarse; consulta el registro.");
+                    WriteLog((quality ? "Escáner: " : "Fusion: ") + ex.GetBaseException().Message);
+                    SetStatus((quality ? "El escáner" : "Fusion") + " no pudo completarse; consulta el registro.");
                 }
             }
             finally
@@ -1279,7 +1326,7 @@ namespace KinectHoard.App
         {
             if (meshPath == null)
             {
-                using (var dialog = new OpenFileDialog { Filter = "Malla 3D PLY|*.ply" })
+                using (var dialog = new OpenFileDialog { Filter = "Malla 3D PLY u OBJ|*.ply;*.obj|PLY|*.ply|OBJ con textura|*.obj" })
                 {
                     if (dialog.ShowDialog(this) != DialogResult.OK) return;
                     meshPath = dialog.FileName;

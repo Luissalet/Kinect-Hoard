@@ -40,6 +40,8 @@ Con la 360 física y `libusbK`, una sesión de diez fotogramas RGBD estáticos s
 
 **Falta validar un escaneo de varias vistas con movimiento real del sensor u objeto**, medir deriva, recuperación tras pérdida de tracking y geometría de superficies ocultas. El modo de región y distancia se verificó con datos RGBD sintéticos, pero no con una cabeza. Tampoco hay cierre de bucle ni detección automática de cabeza. La One sigue usando Kinect Runtime 2.0 para adquirir los fotogramas; Open3D solo realiza la reconstrucción.
 
-El futuro modo de dos cámaras enfrentadas necesita calibración extrínseca, marcas temporales y fusión de ambas vistas. Su contrato y pruebas se describen en [escaneo dual](dual-scan.md); todavía no es una función operativa.
+El modo de dos cámaras enfrentadas captura dos sesiones en paralelo y las fusiona con una calibración extrínseca suministrada. Se probó sintéticamente; faltan calibración real y prueba física simultánea. Su contrato y límites se describen en [escaneo dual](dual-scan.md).
+
+Para obtener OBJ con UV y atlas PNG en lugar de solo color por vértice, usa el [escáner con textura](quality-scanner.md). Ese modo tiene su propia prueba y sus límites documentados.
 
 Referencias de implementación: [integración TSDF](https://www.open3d.org/docs/latest/tutorial/pipelines/rgbd_integration.html), [odometría RGBD](https://www.open3d.org/docs/latest/tutorial/pipelines/rgbd_odometry.html) y [sesión Hoard](session.md).

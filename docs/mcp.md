@@ -32,6 +32,10 @@ Faustus admite un manifiesto `faustus-plugin.json` junto a la aplicación. Este 
 | `analyze_gesture_session(filename)` | Calcula eventos de una sesión de esqueleto en `captures/` |
 | `scan_3d(seconds, tracking, generation, foreground_max_depth?, roi?)` | Graba ColorDepth de One o 360 y exporta malla TSDF color e informe local; los parámetros opcionales aíslan primer plano |
 | `fuse_session(filename, tracking, foreground_max_depth?, roi?)` | Reconstruye una sesión ColorDepth existente en `captures/`, con el mismo recorte opcional |
+| `scan_textured(seconds, generation, tracking, texture_size, max_triangles)` | Graba One o 360 y exporta OBJ, MTL, atlas PNG, PLY e informe de calidad |
+| `scan_dual_textured(extrinsics_filename, seconds, texture_size, max_triangles)` | Graba ambas en paralelo y fusiona con un JSON de calibración medido en `captures/`; prueba física pendiente |
+| `calibrate_dual_landmarks(first_points_metres, second_points_metres, threshold_metres)` | Calcula extrínsecos rígidos de One←360 desde puntos XYZ correspondientes, con RANSAC y error RMS |
+| `fuse_textured_sessions(first_filename, second_filename?, extrinsics_filename?, tracking, texture_size, max_triangles)` | Reconstruye una o dos sesiones existentes; dos requieren extrínsecos medidos |
 | `session_info(filename)` | Resume una sesión de `captures/` sin leer sus píxeles al modelo |
 
 El recurso `kinect-hoard://capabilities` ofrece el JSON completo y `kinect-hoard://toolkit-map` el mapa de adaptación. Los tipos de captura aceptados son `color`, `depth`, `infrared`, `long_infrared`, `body_index`, `skeleton_image`, `background_removed`, `registered_color`, `bodies`, `point_cloud`, `mesh`, `color_cloud` y `color_mesh`.

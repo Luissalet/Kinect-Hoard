@@ -7,6 +7,7 @@ namespace KinectHoard.Driver.ThreeSixty
 {
     public sealed class ThreeSixtyCamera : MarshalByRefObject, ICameraBackend
     {
+        public void SetQualityColor(bool enabled) { }
         private KinectSensor sensor;
         private byte[] pixels;
         private byte[] infraredBytes;
