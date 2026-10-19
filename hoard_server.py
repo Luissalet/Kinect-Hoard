@@ -35,7 +35,7 @@ app = FastAPI(title="Kinect Hoard", lifespan=lifespan)
 @app.get("/api/health")
 def health():
     return {"service": "kinect-hoard", "hoard_link": family.health_block(),
-            "scanner": toolkit.live_scan_status()["state"], "camera_on_demand": True}
+            "camera_on_demand": True}
 
 
 @app.get("/")
