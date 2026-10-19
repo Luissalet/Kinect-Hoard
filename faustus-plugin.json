@@ -3,7 +3,7 @@
   "id": "kinect-hoard",
   "name": "Kinect Hoard",
   "purpose": "Estudio local de cámaras, profundidad, seguimiento corporal, geometría y audio Kinect con código documentado para adaptar a otras aplicaciones.",
-  "capabilities": ["kinect-camera", "depth", "infrared", "body-tracking", "point-cloud", "audio", "diagnostics", "code-examples", "live-scanner", "textured-obj", "fixed-camera", "moving-camera"],
+  "capabilities": ["kinect-camera", "depth", "infrared", "body-tracking", "point-cloud", "audio", "diagnostics", "code-examples", "live-scanner", "textured-obj", "fixed-camera", "moving-camera", "skeleton-blender", "avatar", "face-tracking", "gestures", "recording", "replay", "speech", "opencv", "matlab", "obs-source"],
   "placeholders": ["KINECT_HOARD_DIR"],
   "defaults": {"DATA_DIR": "{KINECT_HOARD_DIR}/captures", "TOKEN_FILE": "{KINECT_HOARD_DIR}/data/mcp-token"},
   "app": {
@@ -24,5 +24,5 @@
     "env": {},
     "optional_env": []
   },
-  "notes": "Ejecuta setup-mcp.ps1 una vez. Abrir desde el Hub inicia la interfaz; Conectar cámara abre el sensor y deja vista previa. Iniciar escaneo comienza la reconstrucción. One fija y Persona son la selección inicial. Giro humano y corrección no rígida aún pendientes de validación. El MCP stdio no inicia cámaras al conectarse."
+  "notes": "Ejecuta setup-mcp.ps1 una vez. El Hub abre el menu de diez modos con logo, acciones, guias y 26 referencias. Camara, cuerpo/Blender, escaner, rostro, audio/voz, interaccion, geometria, sesiones, integraciones y diagnostico. 33 herramientas MCP y API compartidas. Conectar abre el sensor bajo demanda. One fija y Persona son la selección inicial. Giro humano y corrección no rígida aún pendientes de validación. El MCP stdio no inicia cámaras al conectarse."
 }

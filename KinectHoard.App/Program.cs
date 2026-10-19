@@ -19,20 +19,25 @@ namespace KinectHoard.App
         [STAThread]
         private static int Main(string[] args)
         {
-            if (args.Length == 4 && args[0] == "--scanner-server")
+            if (args.Length == 2 && (args[0] == "--demo" || args[0] == "--replay-ui"))
+            {
+                Application.EnableVisualStyles(); Application.SetCompatibleTextRenderingDefault(false);
+                Application.Run(new MainForm(args[0] == "--demo" ? args[1] : "replay", args[0] == "--replay-ui" ? args[1] : null)); return 0;
+            }
+            if ((args.Length == 4 || args.Length == 5) && args[0] == "--scanner-server")
             {
                 var scanner = new FusionScanner(ParseModel(args[2]), args[1], args[3], Path.Combine(ScannerExport.Root(), "captures", "live-" + DateTime.Now.ToString("yyyyMMdd-HHmmss-fff")));
-                return CameraStreamServer.Run(64320, StreamKind.ColorDepth, 0, scanner.Model, true, scanner);
+                return CameraStreamServer.Run(args.Length == 5 ? int.Parse(args[4]) : 64320, StreamKind.ColorDepth, 0, scanner.Model, true, scanner);
             }
             if (args.Length == 6 && args[0] == "--scanner-replay")
             {
                 try { return FusionScanner.Replay(args[1], ParseModel(args[2]), args[3], args[4], args[5] == "cpu"); }
                 catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
             }
-            if (args.Length == 4 && args[0] == "--scanner")
+            if ((args.Length == 4 || args.Length == 5) && args[0] == "--scanner")
             {
                 Application.EnableVisualStyles(); Application.SetCompatibleTextRenderingDefault(false);
-                Application.Run(new LiveScannerForm(args[1], ParseModel(args[2]), args[3])); return 0;
+                Application.Run(new LiveScannerForm(args[1], ParseModel(args[2]), args[3], args.Length == 5 ? int.Parse(args[4]) : 64320)); return 0;
             }
             if (args.Length == 6 && args[0] == "--scanner-probe")
             {
@@ -289,7 +294,7 @@ namespace KinectHoard.App
                     {
                         try
                         {
-                            if (!UsbDiscovery.IsPresent("one"))
+                            if (backend == null && !UsbDiscovery.IsPresent("one"))
                             {
                                 absentPolls++;
                                 if (backend != null) { backend.Dispose(); backend = null; }
@@ -818,7 +823,7 @@ namespace KinectHoard.App
         private int frameCount;
         private DateTime fpsSince = DateTime.UtcNow;
 
-        internal MainForm()
+        internal MainForm(string initialMode = null, string replayPath = null)
         {
             Text = "Kinect Hoard";
             ClientSize = new Size(1120, 790);
@@ -956,7 +961,15 @@ namespace KinectHoard.App
             timer.Tick += (s, e) => PollFrame();
             retryTimer.Interval = 1500;
             retryTimer.Tick += (s, e) => RetryOpen();
-            Shown += (s, e) => { Scan(); if (devices.SelectedItem != null) OpenSelected(); };
+            Shown += (s, e) => {
+                if (initialMode == "replay") { OpenRecording(true, replayPath); return; }
+                Scan();
+                if (initialMode == "dual") { OpenDualPreview(); return; }
+                if (initialMode == "audio") { OpenAudioMonitor(); return; }
+                if (initialMode == "interaction") { OpenInteractionGallery(); return; }
+                if (initialMode == "avatar") { avatarMode.Checked = true; streams.SelectedIndex = 5; }
+                if (devices.SelectedItem != null) OpenSelected();
+            };
             FormClosing += (s, e) => { closing = true; if (audioMonitor != null) audioMonitor.Close(); StopWebServer(false); StopScan(); StopFaceCapture(); StopCamera(); };
             LoadCapabilities();
             SetStatus("Esperando detección.");
@@ -1678,15 +1691,15 @@ namespace KinectHoard.App
             WriteLog("Sesión guardada: " + count + " fotogramas.");
         }
 
-        private void OpenRecording(bool startPaused)
+        private void OpenRecording(bool startPaused, string sourcePath = null)
         {
             using (var dialog = new OpenFileDialog { Filter = "Sesión Kinect Hoard|*.khr" })
-                if (dialog.ShowDialog(this) == DialogResult.OK)
+                if (sourcePath != null || dialog.ShowDialog(this) == DialogResult.OK)
                 {
                     StopCamera();
                     try
                     {
-                        playback = new SessionReader(dialog.FileName);
+                        playback = new SessionReader(sourcePath ?? dialog.FileName);
                         streams.SelectedIndex = (int)playback.Stream;
                         playbackPaused = startPaused;
                         playbackStep = startPaused;
@@ -1697,7 +1710,7 @@ namespace KinectHoard.App
                         frameCount = 0;
                         fpsSince = DateTime.UtcNow;
                         timer.Start();
-                        WriteLog((startPaused ? "Abierta en pausa: " : "Reproduciendo: ") + dialog.FileName);
+                        WriteLog((startPaused ? "Abierta en pausa: " : "Reproduciendo: ") + (sourcePath ?? dialog.FileName));
                     }
                     catch (Exception ex) { SetStatus("No se pudo abrir la sesión: " + ex.GetBaseException().Message); }
                 }

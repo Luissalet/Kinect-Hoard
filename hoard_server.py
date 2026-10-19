@@ -5,6 +5,8 @@ import asyncio
 import inspect
 import json
 import urllib.request
+import concurrent.futures
+import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import get_type_hints
@@ -20,6 +22,7 @@ import mcp_server as toolkit
 ROOT = Path(__file__).resolve().parent
 DATA = ROOT / "data"
 owned_engine = False
+owned_camera = False
 
 
 @asynccontextmanager
@@ -27,6 +30,8 @@ async def lifespan(app):
     yield
     if owned_engine and toolkit.live_scan_status()["state"] != "closed":
         await asyncio.to_thread(toolkit.control_live_scan, "close")
+    if owned_camera:
+        await asyncio.to_thread(toolkit.close_camera)
 
 
 app = FastAPI(title="Kinect Hoard", lifespan=lifespan)
@@ -40,7 +45,126 @@ def health():
 
 @app.get("/")
 def index():
+    return FileResponse(ROOT / "ui" / "workspace.html")
+
+
+@app.get("/scanner")
+def scanner_page():
     return FileResponse(ROOT / "ui" / "scanner.html")
+
+
+@app.get("/app-icon.svg")
+def logo():
+    return FileResponse(ROOT / "app-icon.svg")
+
+
+@app.get("/ui/{asset}")
+def ui_asset(asset: str):
+    if asset == "hoard-theme.css":
+        return FileResponse(Path(hoard_link.__file__).parent / "ui" / "hoard-theme.css")
+    if asset not in ("workspace.js", "workspace.css"):
+        raise HTTPException(404)
+    return FileResponse(ROOT / "ui" / asset)
+
+
+@app.get("/api/workspace/modes")
+def modes():
+    return toolkit.list_modes()
+
+
+@app.get("/api/camera/status")
+def camera_status():
+    return toolkit.camera_status()
+
+
+@app.get("/api/camera/frame")
+def camera_frame():
+    try:
+        return toolkit.get_live_frame()
+    except OSError as exc:
+        raise HTTPException(503, "Conecta el flujo Esqueleto para recibir articulaciones") from exc
+
+
+@app.get("/api/camera/{view}")
+def camera_image(view: str):
+    if view not in ("frame.png", "avatar.png", "frame.raw", "rgbd"):
+        raise HTTPException(404)
+    endpoint = "api/rgbd" if view == "rgbd" else view
+    port = toolkit.runtime.endpoint("camera")["port"]
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/{endpoint}", timeout=2) as response:
+            return Response(response.read(), media_type="image/png" if view.endswith(".png") else "application/octet-stream", headers={"Cache-Control": "no-store"})
+    except OSError as exc:
+        raise HTTPException(503, "El lector todavía no ha entregado este flujo") from exc
+
+
+@app.get("/camera-output")
+def clean_output():
+    return Response('''<!doctype html><html lang="es"><meta charset="utf-8"><title>Kinect Hoard · Salida de cámara</title><style>html,body{margin:0;background:transparent;width:100%;height:100%;overflow:hidden}img{width:100%;height:100%;object-fit:contain}</style><img id="video" alt="Salida Kinect"><script>const image=document.getElementById('video');function frame(){image.src='/api/camera/frame.png?t='+Date.now()}image.onload=()=>setTimeout(frame,70);image.onerror=()=>setTimeout(frame,500);frame()</script></html>''', media_type="text/html")
+
+
+@app.get("/api/workspace/source")
+def source(path: str):
+    try:
+        if path in ("integrations/blender_kinect.py", "examples/opencv_live.py", "examples/opencv_raw.py", "examples/matlab_live.m", "examples/matlab_depth.m"):
+            return Response((ROOT / path).read_text(encoding="utf-8"), media_type="text/plain")
+        return Response(toolkit.read_hoard_source(path), media_type="text/plain")
+    except (ValueError, OSError) as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+@app.get("/api/workspace/file/{filename:path}")
+def artifact(filename: str):
+    path = (toolkit.CAPTURE_DIR / filename).resolve()
+    if not path.is_relative_to(toolkit.CAPTURE_DIR.resolve()) or not path.is_file():
+        raise HTTPException(404)
+    return FileResponse(path)
+
+
+jobs = {}
+executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+tool_functions = {}
+
+
+class ToolCommand(BaseModel):
+    tool: str
+    arguments: dict = {}
+
+
+@app.post("/api/workspace/run")
+def run_tool(command: ToolCommand):
+    if command.tool not in tool_functions:
+        raise HTTPException(404, "Herramienta desconocida")
+    function, model = tool_functions[command.tool]
+    try:
+        arguments = model(**command.arguments).model_dump()
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    job_id = uuid.uuid4().hex
+    job = {"id": job_id, "tool": command.tool, "state": "queued"}
+    jobs[job_id] = job
+    def execute():
+        global owned_camera
+        job["state"] = "running"
+        try:
+            job["result"] = function(**arguments)
+            if command.tool in ("start_camera", "connect_blender"):
+                owned_camera = True
+            job["state"] = "finished"
+        except Exception as exc:
+            job.update(state="error", error=str(exc))
+    executor.submit(execute)
+    return job
+
+
+@app.get("/api/workspace/jobs")
+def job_status():
+    return list(jobs.values())
+
+
+@app.get("/api/workspace/files")
+def files():
+    return toolkit.list_artifacts()
 
 
 @app.get("/ui/hoard-theme.css")
@@ -57,11 +181,11 @@ class ScanSettings(BaseModel):
 @app.post("/api/scanner/connect")
 async def connect(settings: ScanSettings):
     global owned_engine
-    was_closed = toolkit.live_scan_status()["state"] == "closed"
+    was_closed = (await asyncio.to_thread(toolkit.live_scan_status))["state"] == "closed"
     try:
         result = await asyncio.to_thread(toolkit._open_live_scan, settings.mode,
                                          settings.generation, settings.subject, False)
-    except (ValueError, RuntimeError, OSError) as exc:
+    except (ValueError, RuntimeError, OSError, TimeoutError) as exc:
         raise HTTPException(400, str(exc)) from exc
     owned_engine = owned_engine or was_closed
     return result
@@ -99,7 +223,8 @@ def preview(view: str):
     if view not in ("preview", "surface"):
         raise HTTPException(404)
     try:
-        with urllib.request.urlopen(f"http://127.0.0.1:64320/api/scan/{view}.png", timeout=3) as response:
+        port = toolkit.runtime.endpoint("scanner")["port"]
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/scan/{view}.png", timeout=3) as response:
             return Response(response.read(), media_type="image/png", headers={"Cache-Control": "no-store"})
     except OSError as exc:
         raise HTTPException(503, "Vista todavía no disponible") from exc
@@ -126,6 +251,7 @@ def install_tool(name):
     fields = {p.name: (hints.get(p.name, str), ... if p.default is inspect.Parameter.empty else p.default)
               for p in inspect.signature(function).parameters.values()}
     model = create_model(name + "Arguments", **fields)
+    tool_functions[name] = (function, model)
 
     async def endpoint(body):
         return await asyncio.to_thread(function, **body.model_dump())

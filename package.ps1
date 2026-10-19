@@ -36,6 +36,12 @@ Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'diagnose-audio.ps1') -Destinati
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'setup-mcp.ps1') -Destination $stage
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'launch-hoard.ps1') -Destination $stage
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'mcp_server.py') -Destination $stage
+foreach ($name in @('hoard_server.py', 'camera_runtime.py', 'scanner_worker.py', 'workspace_catalog.py', 'app-icon.svg', 'app-icon.png', 'app-icon.ico')) {
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination $stage
+}
+foreach ($name in @('ui', 'integrations')) {
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination $stage -Recurse
+}
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'fusion.py') -Destination $stage
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'quality_scan.py') -Destination $stage
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'dual_calibration.py') -Destination $stage

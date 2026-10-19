@@ -14,6 +14,7 @@ with patch.object(hoard_server.toolkit, 'live_scan_status', side_effect=Assertio
         assert response.json()['service'] == 'kinect-hoard'
         assert response.json()['camera_on_demand'] is True
         tools = client.get('/api/agent/tools').json()['tools']
-        assert len(tools) == 24
+        assert len(tools) == len(hoard_server.tool_functions)
+        assert {t['name'] for t in tools} >= {'list_modes', 'start_camera', 'connect_blender', 'get_live_frame', 'replay_session'}
         assert len(hoard_server.toolkit._catalog()['capabilities']) == 26
-print('Health avoids camera probe; 24 MCP tools describe 26 catalogue capabilities')
+print('Health avoids camera probe; shared tools include workspace and live bridges')

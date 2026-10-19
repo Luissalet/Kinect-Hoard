@@ -1,79 +1,393 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-19T03:00:00Z",
+  "generatedAt": "2026-10-19T04:28:07.209530+00:00",
   "title": "Design System: Kinect Hoard",
   "extensions": {
     "colorMeta": {
       "primary": {
         "role": "primary",
         "displayName": "Kinect Mint",
-        "tonalRamp": ["oklch(15% 0.07 175)", "oklch(26% 0.07 175)", "oklch(38% 0.07 175)", "oklch(49% 0.07 175)", "oklch(61% 0.07 175)", "oklch(72% 0.07 175)", "oklch(84% 0.07 175)", "oklch(95% 0.07 175)"]
+        "tonalRamp": [
+          "oklch(15% 0.0972 177.2)",
+          "oklch(26% 0.0972 177.2)",
+          "oklch(38% 0.0972 177.2)",
+          "oklch(49% 0.0972 177.2)",
+          "oklch(61% 0.0972 177.2)",
+          "oklch(72% 0.0972 177.2)",
+          "oklch(84% 0.0972 177.2)",
+          "oklch(95% 0.0972 177.2)"
+        ]
+      },
+      "primary-hover": {
+        "role": "primary",
+        "displayName": "Bright Mint",
+        "tonalRamp": [
+          "oklch(15% 0.0735 178.6)",
+          "oklch(26% 0.0735 178.6)",
+          "oklch(38% 0.0735 178.6)",
+          "oklch(49% 0.0735 178.6)",
+          "oklch(61% 0.0735 178.6)",
+          "oklch(72% 0.0735 178.6)",
+          "oklch(84% 0.0735 178.6)",
+          "oklch(95% 0.0735 178.6)"
+        ]
+      },
+      "primary-ink": {
+        "role": "primary",
+        "displayName": "Deep Mint Ink",
+        "tonalRamp": [
+          "oklch(15% 0.0173 183.3)",
+          "oklch(26% 0.0173 183.3)",
+          "oklch(38% 0.0173 183.3)",
+          "oklch(49% 0.0173 183.3)",
+          "oklch(61% 0.0173 183.3)",
+          "oklch(72% 0.0173 183.3)",
+          "oklch(84% 0.0173 183.3)",
+          "oklch(95% 0.0173 183.3)"
+        ]
+      },
+      "deep": {
+        "role": "neutral",
+        "displayName": "Deep Charcoal",
+        "tonalRamp": [
+          "oklch(15% 0.0031 196.9)",
+          "oklch(26% 0.0031 196.9)",
+          "oklch(38% 0.0031 196.9)",
+          "oklch(49% 0.0031 196.9)",
+          "oklch(61% 0.0031 196.9)",
+          "oklch(72% 0.0031 196.9)",
+          "oklch(84% 0.0031 196.9)",
+          "oklch(95% 0.0031 196.9)"
+        ]
+      },
+      "sunken": {
+        "role": "neutral",
+        "displayName": "Sunken Charcoal",
+        "tonalRamp": [
+          "oklch(15% 0.0032 196.9)",
+          "oklch(26% 0.0032 196.9)",
+          "oklch(38% 0.0032 196.9)",
+          "oklch(49% 0.0032 196.9)",
+          "oklch(61% 0.0032 196.9)",
+          "oklch(72% 0.0032 196.9)",
+          "oklch(84% 0.0032 196.9)",
+          "oklch(95% 0.0032 196.9)"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Surface Charcoal",
+        "tonalRamp": [
+          "oklch(15% 0.0044 196.9)",
+          "oklch(26% 0.0044 196.9)",
+          "oklch(38% 0.0044 196.9)",
+          "oklch(49% 0.0044 196.9)",
+          "oklch(61% 0.0044 196.9)",
+          "oklch(72% 0.0044 196.9)",
+          "oklch(84% 0.0044 196.9)",
+          "oklch(95% 0.0044 196.9)"
+        ]
+      },
+      "elevated": {
+        "role": "neutral",
+        "displayName": "Elevated Charcoal",
+        "tonalRamp": [
+          "oklch(15% 0.0047 219.6)",
+          "oklch(26% 0.0047 219.6)",
+          "oklch(38% 0.0047 219.6)",
+          "oklch(49% 0.0047 219.6)",
+          "oklch(61% 0.0047 219.6)",
+          "oklch(72% 0.0047 219.6)",
+          "oklch(84% 0.0047 219.6)",
+          "oklch(95% 0.0047 219.6)"
+        ]
+      },
+      "hover": {
+        "role": "neutral",
+        "displayName": "Hover Charcoal",
+        "tonalRamp": [
+          "oklch(15% 0.0046 219.6)",
+          "oklch(26% 0.0046 219.6)",
+          "oklch(38% 0.0046 219.6)",
+          "oklch(49% 0.0046 219.6)",
+          "oklch(61% 0.0046 219.6)",
+          "oklch(72% 0.0046 219.6)",
+          "oklch(84% 0.0046 219.6)",
+          "oklch(95% 0.0046 219.6)"
+        ]
+      },
+      "border": {
+        "role": "neutral",
+        "displayName": "Graphite Line",
+        "tonalRamp": [
+          "oklch(15% 0.0044 219.6)",
+          "oklch(26% 0.0044 219.6)",
+          "oklch(38% 0.0044 219.6)",
+          "oklch(49% 0.0044 219.6)",
+          "oklch(61% 0.0044 219.6)",
+          "oklch(72% 0.0044 219.6)",
+          "oklch(84% 0.0044 219.6)",
+          "oklch(95% 0.0044 219.6)"
+        ]
+      },
+      "border-hover": {
+        "role": "neutral",
+        "displayName": "Light Graphite Line",
+        "tonalRamp": [
+          "oklch(15% 0.0065 211.0)",
+          "oklch(26% 0.0065 211.0)",
+          "oklch(38% 0.0065 211.0)",
+          "oklch(49% 0.0065 211.0)",
+          "oklch(61% 0.0065 211.0)",
+          "oklch(72% 0.0065 211.0)",
+          "oklch(84% 0.0065 211.0)",
+          "oklch(95% 0.0065 211.0)"
+        ]
+      },
+      "text": {
+        "role": "neutral",
+        "displayName": "Cool Light Text",
+        "tonalRamp": [
+          "oklch(15% 0.0100 212.5)",
+          "oklch(26% 0.0100 212.5)",
+          "oklch(38% 0.0100 212.5)",
+          "oklch(49% 0.0100 212.5)",
+          "oklch(61% 0.0100 212.5)",
+          "oklch(72% 0.0100 212.5)",
+          "oklch(84% 0.0100 212.5)",
+          "oklch(95% 0.0100 212.5)"
+        ]
+      },
+      "text-muted": {
+        "role": "neutral",
+        "displayName": "Muted Cool Text",
+        "tonalRamp": [
+          "oklch(15% 0.0094 214.4)",
+          "oklch(26% 0.0094 214.4)",
+          "oklch(38% 0.0094 214.4)",
+          "oklch(49% 0.0094 214.4)",
+          "oklch(61% 0.0094 214.4)",
+          "oklch(72% 0.0094 214.4)",
+          "oklch(84% 0.0094 214.4)",
+          "oklch(95% 0.0094 214.4)"
+        ]
+      },
+      "text-dim": {
+        "role": "neutral",
+        "displayName": "Dim Cool Text",
+        "tonalRamp": [
+          "oklch(15% 0.0107 212.5)",
+          "oklch(26% 0.0107 212.5)",
+          "oklch(38% 0.0107 212.5)",
+          "oklch(49% 0.0107 212.5)",
+          "oklch(61% 0.0107 212.5)",
+          "oklch(72% 0.0107 212.5)",
+          "oklch(84% 0.0107 212.5)",
+          "oklch(95% 0.0107 212.5)"
+        ]
+      },
+      "error": {
+        "role": "secondary",
+        "displayName": "Soft Coral Error",
+        "tonalRamp": [
+          "oklch(15% 0.0922 27.6)",
+          "oklch(26% 0.0922 27.6)",
+          "oklch(38% 0.0922 27.6)",
+          "oklch(49% 0.0922 27.6)",
+          "oklch(61% 0.0922 27.6)",
+          "oklch(72% 0.0922 27.6)",
+          "oklch(84% 0.0922 27.6)",
+          "oklch(95% 0.0922 27.6)"
+        ]
       }
     },
     "typographyMeta": {
-      "body": { "displayName": "Working text", "purpose": "Shared sans stack for instructions and controls; no font download is supplied by this surface." },
-      "label": { "displayName": "Field label", "purpose": "Muted labels above sensor, movement and subject selects." }
+      "identity": {
+        "displayName": "Family identity",
+        "purpose": "Serif wordmark; installed fallback determines the rendered face."
+      },
+      "headline": {
+        "displayName": "Workspace heading",
+        "purpose": "Main route headings; mobile and scanner use a smaller size."
+      },
+      "title": {
+        "displayName": "Section title",
+        "purpose": "Actions, guides and activity sections."
+      },
+      "body": {
+        "displayName": "Working text",
+        "purpose": "Instructions, controls and readable operation output."
+      },
+      "label": {
+        "displayName": "Field label",
+        "purpose": "Visible labels, frame captions and subdued metadata."
+      },
+      "code": {
+        "displayName": "Implementation text",
+        "purpose": "JSON entry and local source excerpts."
+      }
     },
-    "breakpoints": [{ "name": "stacked-workspace", "value": "800px" }],
-    "focus": { "outline": "2px solid var(--hoard-accent)", "outlineOffset": "3px" },
-    "disabled": { "opacity": 0.46 },
+    "shadows": [],
+    "motion": [],
+    "breakpoints": [
+      {
+        "name": "sticky-sidebar-min",
+        "value": "1100px"
+      },
+      {
+        "name": "compact-workspace-max",
+        "value": "1000px"
+      },
+      {
+        "name": "mobile-workspace-max",
+        "value": "700px"
+      },
+      {
+        "name": "stacked-scanner-max",
+        "value": "800px"
+      }
+    ],
+    "focus": {
+      "outline": "2px solid var(--hoard-accent)",
+      "outlineOffset": "3px"
+    },
+    "disabled": {
+      "workspaceOpacity": 0.5,
+      "scannerOpacity": 0.46
+    },
     "provenance": {
-      "sources": ["ui/scanner.html", "hoard_server.py", "HoardLink/hoard_link/ui/hoard-theme.css"],
-      "captures": [".impeccable/review/selection-360.png", ".impeccable/review/mobile.png"],
-      "visualReview": "ship; both contextual-label fixes resolved",
-      "scope": "Web surface only. Native studio preserved. Scan quality is not accepted.",
-      "tonalRamp": "Display-only synthesized ramp, not a set of implemented CSS tokens."
-    }
+      "sources": [
+        "ui/workspace.html",
+        "ui/workspace.css",
+        "ui/workspace.js",
+        "ui/scanner.html",
+        "workspace_catalog.py",
+        "app-icon.svg",
+        "app-icon.ico",
+        "app-icon.png",
+        "HoardLink/hoard_link/ui/hoard-theme.css"
+      ],
+      "captures": [
+        ".impeccable/review944/desktop.jpg",
+        ".impeccable/review944/mobile.jpg",
+        ".impeccable/review944/user-1890.jpg",
+        ".impeccable/review944/camera.jpg"
+      ],
+      "visualReview": "Task 944 final reviewer944 disposition: ship for the bounded web workspace. All three scored findings resolved: operation history, explicit active/pending stream and zero-body avatar states, and DESIGN truth. This does not approve scan quality. First-round screenshots precede reader/avatar/job-state fixes.",
+      "scope": "Operate web workspace and preserved scanner. Native studio design is outside scope. Natural human rotation scan quality is experimental and unaccepted.",
+      "tonalRamp": "Display-only synthesized OKLCH ramps at the measured hue/chroma; not implemented CSS tokens.",
+      "changeLog": [
+        "2026-10-19: replaced scanner-only documentation with ten-mode menu and working controls.",
+        "Recorded selected/actual reader mismatch handling, zero-body avatar empty state and per-job Activity history.",
+        "Removed obsolete scanner-only ship disposition; retained pinned Hoard family and sensor icon.",
+        "Final scoped pass: recorded reviewer944 ship disposition, mode-change scroll/main-focus behavior and matching SVG-derived PNG/ICO identity assets; scan quality remains unaccepted."
+      ]
+    },
+    "navigationBehavior": "Mode route changes scroll to the top and focus main with preventScroll."
   },
   "components": [
     {
       "name": "Primary action",
       "kind": "button",
-      "refersTo": "button-primary",
-      "description": "Start scanning after camera connection.",
-      "html": "<button class=\"ds-primary\">Iniciar escaneo</button>",
-      "css": ".ds-primary{font:600 16px/1.45 var(--hoard-font-sans);min-height:42px;padding:9px 13px;border:1px solid var(--hoard-accent);border-radius:var(--hoard-radius-sm);background:var(--hoard-accent);color:var(--hoard-accent-ink);cursor:pointer}.ds-primary:hover:enabled{background:var(--hoard-accent-strong)}.ds-primary:focus-visible{outline:2px solid var(--hoard-accent);outline-offset:3px}.ds-primary:disabled{opacity:.46;cursor:default}"
+      "description": "Explicit sensor connection or operation execution.",
+      "html": "<button class=\"ds-primary\">Conectar cámara</button>",
+      "css": ".ds-primary{font:16px/1.45 var(--hoard-font-sans,'Segoe UI',sans-serif);min-height:42px;padding:9px 12px;border:1px solid var(--hoard-border,#3a3d3e);border-radius:6px;cursor:pointer;font-weight:600;background:var(--hoard-accent,#7adac4);color:var(--hoard-accent-ink,#14201e);border-color:var(--hoard-accent,#7adac4)}.ds-primary:hover:enabled{background:var(--hoard-accent-strong,#a0e6d6)}.ds-primary:focus-visible{outline:2px solid var(--hoard-accent,#7adac4);outline-offset:3px}.ds-primary:disabled{opacity:.5;cursor:default}",
+      "refersTo": "button-primary"
     },
     {
       "name": "Ordinary action",
       "kind": "button",
-      "refersTo": "button-secondary",
-      "description": "Explicit connection and ordinary scanner controls.",
-      "html": "<button class=\"ds-secondary\">Conectar cámara</button>",
-      "css": ".ds-secondary{font:16px/1.45 var(--hoard-font-sans);min-height:42px;padding:9px 13px;border:1px solid var(--hoard-border);border-radius:var(--hoard-radius-sm);background:var(--hoard-elevated);color:var(--hoard-text);cursor:pointer}.ds-secondary:hover:enabled{background:var(--hoard-hover);border-color:var(--hoard-border-hover)}.ds-secondary:focus-visible{outline:2px solid var(--hoard-accent);outline-offset:3px}.ds-secondary:disabled{opacity:.46;cursor:default}"
+      "description": "Detection, disconnect and desktop studio controls.",
+      "html": "<button class=\"ds-secondary\">Detectar sensores</button>",
+      "css": ".ds-secondary{font:16px/1.45 var(--hoard-font-sans,'Segoe UI',sans-serif);min-height:42px;padding:9px 12px;border:1px solid var(--hoard-border,#3a3d3e);border-radius:6px;cursor:pointer;background:var(--hoard-elevated,#282b2c);color:var(--hoard-text,#e1eaec)}.ds-secondary:hover:enabled{background:var(--hoard-hover,#303334);border-color:var(--hoard-border-hover,#5e6364)}.ds-secondary:focus-visible{outline:2px solid var(--hoard-accent,#7adac4);outline-offset:3px}.ds-secondary:disabled{opacity:.5;cursor:default}",
+      "refersTo": "button-secondary"
     },
     {
-      "name": "Labeled selector",
+      "name": "Labeled stream selector",
       "kind": "input",
-      "description": "Sensor selection before opening the camera.",
-      "html": "<label class=\"ds-label\">Sensor<select class=\"ds-select\"><option>Kinect One</option><option>Kinect 360</option></select></label>",
-      "css": ".ds-label{display:grid;gap:6px;font:13px/1.45 var(--hoard-font-sans);color:var(--hoard-text-muted)}.ds-select{font:16px/1.45 var(--hoard-font-sans);min-width:160px;min-height:42px;padding:9px 13px;border:1px solid var(--hoard-border);border-radius:var(--hoard-radius-sm);background:var(--hoard-elevated);color:var(--hoard-text)}.ds-select:focus-visible{outline:2px solid var(--hoard-accent);outline-offset:3px}"
+      "description": "Selected stream is applied with Connect, separately from actual reader state.",
+      "html": "<label class=\"ds-label\">Flujo<select class=\"ds-select\"><option>Color registrado con profundidad</option><option>Esqueleto</option></select></label>",
+      "css": ".ds-label{display:grid;gap:6px;font:13px/1.45 var(--hoard-font-sans,\"Segoe UI\",sans-serif);color:var(--hoard-text-muted,#b4bcbe)}.ds-select{font:16px/1.45 var(--hoard-font-sans,'Segoe UI',sans-serif);min-height:42px;padding:9px 12px;border:1px solid var(--hoard-border,#3a3d3e);border-radius:6px;cursor:pointer;max-width:100%;background:var(--hoard-elevated,#282b2c);color:var(--hoard-text,#e1eaec)}.ds-select:focus-visible{outline:2px solid var(--hoard-accent,#7adac4);outline-offset:3px}",
+      "refersTo": "field"
     },
     {
-      "name": "Family navigation",
+      "name": "Mode navigation",
       "kind": "nav",
-      "description": "Links to the local family hub and agent interfaces.",
-      "html": "<nav class=\"ds-nav\" aria-label=\"Herramientas\"><a href=\"http://127.0.0.1:8810/\">Hoard Hub</a><a href=\"/docs\">API</a><a href=\"/api/agent/tools\">Herramientas MCP</a></nav>",
-      "css": ".ds-nav{display:flex;align-items:center;flex-wrap:wrap;gap:20px}.ds-nav a{font:14px/1.45 var(--hoard-font-sans);color:var(--hoard-text-muted);text-underline-offset:4px;white-space:nowrap}.ds-nav a:focus-visible{outline:2px solid var(--hoard-accent);outline-offset:3px}"
+      "description": "Persistent modes, with active route and independently scrolling mobile strip.",
+      "html": "<nav class=\"ds-nav\" aria-label=\"Modos de Kinect\"><a href=\"#inicio\">Todos los modos</a><a href=\"#camera\" aria-current=\"page\">Cámara</a><a href=\"#body\">Cuerpo, esqueleto y avatar</a></nav>",
+      "css": ".ds-nav{display:grid;background:var(--hoard-surface,#1e2121);padding:12px}.ds-nav a{font:14px/1.45 var(--hoard-font-sans,\"Segoe UI\",sans-serif);padding:9px 12px;border-radius:6px;text-decoration:none;color:var(--hoard-text-muted,#b4bcbe)}.ds-nav a:hover{background:var(--hoard-hover,#303334)}.ds-nav a[aria-current=\"page\"]{background:var(--hoard-elevated,#282b2c);color:var(--hoard-accent,#7adac4)}.ds-nav a:focus-visible{outline:2px solid var(--hoard-accent,#7adac4);outline-offset:3px}@media(max-width:700px){.ds-nav{display:flex;overflow:auto}.ds-nav a{white-space:nowrap}}",
+      "refersTo": "navigation-active"
     },
     {
-      "name": "Empty image viewport",
+      "name": "Mode index row",
       "kind": "custom",
-      "refersTo": "viewport",
-      "description": "Contained camera or reconstructed-surface imagery with contextual empty text.",
-      "html": "<div class=\"ds-viewport\"><div class=\"ds-empty\">La superficie aparecerá aquí al iniciar el escaneo.</div></div>",
-      "css": ".ds-viewport{display:grid;place-items:center;aspect-ratio:4/3;overflow:hidden;background:var(--hoard-sunken);border:1px solid var(--hoard-border);border-radius:var(--hoard-radius)}.ds-empty{max-width:38ch;padding:30px;text-align:center;font:16px/1.45 var(--hoard-font-sans);color:var(--hoard-text-dim)}"
+      "description": "Divided linked row with name, useful description and opening cue.",
+      "html": "<a class=\"ds-mode\" href=\"#camera\"><strong>Cámara</strong><span>RGB, profundidad, infrarrojos y color registrado.</span><span class=\"ds-open\">Abrir</span></a>",
+      "css": ".ds-mode{display:grid;grid-template-columns:minmax(150px,.8fr) minmax(0,1.5fr) auto;gap:24px;align-items:center;padding:18px 0;border-bottom:1px solid var(--hoard-border,#3a3d3e);text-decoration:none;color:var(--hoard-text,#e1eaec);font:16px/1.45 var(--hoard-font-sans,'Segoe UI',sans-serif);}.ds-mode strong{font-size:17px;font-weight:600}.ds-mode span{font-size:14px;color:var(--hoard-text-muted,#b4bcbe)}.ds-mode .ds-open{color:var(--hoard-accent,#7adac4)}.ds-mode:hover{background:var(--hoard-surface,#1e2121)}.ds-mode:focus-visible{outline:2px solid var(--hoard-accent,#7adac4);outline-offset:3px}@media(max-width:1000px){.ds-mode{grid-template-columns:1fr;gap:5px}.ds-open{display:none}}"
+    },
+    {
+      "name": "Live image empty state",
+      "kind": "custom",
+      "description": "No substituted imagery when a body or matching frame is unavailable.",
+      "html": "<figure class=\"ds-live\"><div class=\"ds-well\"><p>No hay cuerpos detectados. Colócate delante de la One.</p></div><figcaption>Avatar · articulaciones seguidas por One</figcaption></figure>",
+      "css": ".ds-live{margin:0;font:16px/1.45 var(--hoard-font-sans,'Segoe UI',sans-serif);}.ds-well{min-height:230px;height:min(42vh,400px);display:grid;place-items:center;overflow:hidden;border:1px solid var(--hoard-border,#3a3d3e);border-radius:8px;background:var(--hoard-sunken,#121414)}.ds-well p{max-width:42ch;padding:24px;text-align:center;color:var(--hoard-text-muted,#b4bcbe)}.ds-live figcaption{font-size:13px;color:var(--hoard-text-dim,#9ba4a6);margin-top:8px;font-variant-numeric:tabular-nums}@media(max-width:700px){.ds-well{height:280px}}",
+      "refersTo": "viewport"
+    },
+    {
+      "name": "Reference disclosure",
+      "kind": "custom",
+      "description": "Contract and local implementation references remain near each mode.",
+      "html": "<section class=\"ds-reference\"><h3>Color y profundidad</h3><p>RGB registrado y datos de profundidad.</p><a href=\"/api/workspace/source?path=KinectHoard.Core%2FCamera.cs\">KinectHoard.Core/Camera.cs</a><details><summary>Leer contrato y documentación</summary><pre>Contrato y documentación de la capacidad.</pre></details></section>",
+      "css": ".ds-reference{padding:14px 0;border-bottom:1px solid var(--hoard-border,#3a3d3e);color:var(--hoard-text,#e1eaec);font:16px/1.45 var(--hoard-font-sans,'Segoe UI',sans-serif);}.ds-reference h3{font-size:17px;margin:0}.ds-reference p{font-size:14px;margin:8px 0;color:var(--hoard-text-muted,#b4bcbe)}.ds-reference a{font-size:13px;color:var(--hoard-accent,#7adac4);overflow-wrap:anywhere;text-underline-offset:4px}.ds-reference summary{padding:10px 0;cursor:pointer}.ds-reference pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:540px;overflow:auto;padding:18px;background:var(--hoard-sunken,#121414);font-size:13px}.ds-reference summary:focus-visible{outline:2px solid var(--hoard-accent,#7adac4);outline-offset:3px}.ds-reference a:focus-visible{outline:2px solid var(--hoard-accent,#7adac4);outline-offset:3px}"
+    },
+    {
+      "name": "Activity history",
+      "kind": "custom",
+      "description": "Each job keeps its own state, expandable result and artifact links.",
+      "html": "<section class=\"ds-activity\"><h2>Actividad</h2><details><summary>Guardar captura o geometría · En cola</summary><p>La operación espera su turno.</p></details><details open><summary>Articulaciones y fotograma · Finalizada</summary><pre>{ \"bodies_count\": 0 }</pre></details></section>",
+      "css": ".ds-activity{margin-top:28px;border-top:1px solid var(--hoard-border,#3a3d3e);padding-top:18px;color:var(--hoard-text,#e1eaec);font:16px/1.45 var(--hoard-font-sans,'Segoe UI',sans-serif);}.ds-activity h2{font-size:18px;font-weight:600;margin:0 0 12px}.ds-activity summary{padding:10px 0;cursor:pointer}.ds-activity p{color:var(--hoard-text-muted,#b4bcbe)}.ds-activity pre{max-height:360px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;background:var(--hoard-sunken,#121414);padding:16px}.ds-activity summary:focus-visible{outline:2px solid var(--hoard-accent,#7adac4);outline-offset:3px}"
+    },
+    {
+      "name": "Sensor identity",
+      "kind": "custom",
+      "description": "Existing sensor mark accompanies the serif family wordmark and links home.",
+      "html": "<a href=\"#inicio\" class=\"ds-brand\"><svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 96 96\"><rect width=\"96\" height=\"96\" rx=\"18\" fill=\"#1e2121\"/><g fill=\"none\" stroke=\"#7adac4\" stroke-width=\"4\"><path d=\"M17 29h62v25H17z\"/><circle cx=\"31\" cy=\"41.5\" r=\"6\"/><circle cx=\"50\" cy=\"41.5\" r=\"3\"/><circle cx=\"66\" cy=\"41.5\" r=\"5\"/><path d=\"M48 54v13m-16 6 16-6 16 6M24 62l-6 8m54-8 6 8\"/></g></svg><span>Kinect Hoard</span></a>",
+      "css": ".ds-brand{display:flex;align-items:center;gap:12px;color:var(--hoard-accent,#7adac4);font:600 23px var(--hoard-font-serif,Georgia,serif);text-decoration:none;white-space:nowrap}.ds-brand svg{width:40px;height:40px}.ds-brand:focus-visible{outline:2px solid var(--hoard-accent,#7adac4);outline-offset:3px}@media(max-width:700px){.ds-brand{font-size:21px}.ds-brand svg{width:34px;height:34px}}"
     }
   ],
   "narrative": {
     "northStar": "The Hoard Family Workbench",
-    "overview": "This web surface extends the existing Hoard family: charcoal working surfaces, a mint Kinect accent, serif identity and readable sans controls. It gives camera and reconstruction imagery most of the available space. The native Windows studio remains a separate, preserved interface, opened explicitly from the web header.\n\nThe source of truth is `ui/scanner.html` plus the shared HoardLink `hoard_link/ui/hoard-theme.css`, served by `hoard_server.py`. This document records that web implementation; it does not prescribe a native studio redesign.",
-    "keyCharacteristics": ["Shared family identity with a restrained Kinect accent.", "Flat working surfaces and clear control states.", "Large camera and colored-surface views."],
-    "rules": [
-      { "name": "The Family Palette Rule", "body": "Consume the shared Hoard theme and keep the Kinect mint override local to this app. Preserve the official Faustus launcher's own mark and color instead of recoloring it as a scanner control.", "section": "colors" },
-      { "name": "The Identity and Work Rule", "body": "Reserve the serif treatment for identity; keep task titles, instructions and controls in the shared sans stack.", "section": "typography" }
+    "overview": "Kinect Hoard extends the pinned Hoard family world: charcoal working surfaces,\nmint Kinect accents, serif identity and readable sans controls. It is an Operate\nsurface with a permanent mode menu, practical controls and implementation\nreferences. The sensor-shaped `app-icon.svg` identifies the workspace and scanner.\n\nThe web system is recorded from `ui/workspace.html`, `ui/workspace.css`,\n`ui/workspace.js`, the preserved `ui/scanner.html` and the shared HoardLink theme.\nThe desktop studio remains available explicitly; its native design is outside\nthis document's scope. The implementation extends the existing world without\nintroducing a new visual direction.",
+    "keyCharacteristics": [
+      "Shared family identity with a restrained Kinect accent.",
+      "Flat, divided work areas with persistent mode navigation.",
+      "Actual camera and avatar views with explicit reader and empty states.",
+      "Executable mode actions, local source references and retained operation results."
     ],
-    "dos": ["Do extend the shared Hoard family theme and preserve the native studio entry.", "Do keep control labels accurate for the selected sensor and subject.", "Do expose camera state, disabled actions and experimental tracking limits."],
-    "donts": ["Don't add slogans or substitute a new visual identity for the family theme.", "Don't present export completion or UI review as acceptance of scan quality."]
+    "rules": [
+      {
+        "name": "The Family Palette Rule",
+        "body": "Consume the shared Hoard theme and keep the Kinect\nmint override local to this app. Preserve the official Faustus launcher's own mark\nand color instead of recoloring it as a Kinect control.",
+        "section": "colors"
+      },
+      {
+        "name": "The Identity and Work Rule",
+        "body": "Reserve the serif treatment for identity; keep task\ntitles, instructions and controls in the shared sans stack.",
+        "section": "typography"
+      }
+    ],
+    "dos": [
+      "Do extend the shared Hoard family theme and preserve the native studio entry.",
+      "Do keep all ten modes discoverable with their actions, guides and source references.",
+      "Do distinguish selected controls from the actual reader and hide mismatched previews.",
+      "Do state zero-body, queued, partial and error outcomes in readable text.",
+      "Do retain separate operation results and their saved artifact links in Activity.",
+      "Do keep keyboard focus visible and mobile overflow inside the relevant region."
+    ],
+    "donts": [
+      "Don't add slogans or substitute a new visual identity for the family theme.",
+      "Don't present export completion or UI review as acceptance of scan quality.",
+      "Don't display a placeholder avatar as detected motion or start a sensor on page load."
+    ]
   }
 }

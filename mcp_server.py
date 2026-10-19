@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import math
+import os
+from functools import wraps
 import subprocess
 import sys
 import time
@@ -13,6 +15,8 @@ from pathlib import Path
 from typing import Any
 
 from mcp.server import MCPServer
+import camera_runtime as runtime
+from workspace_catalog import catalog as mode_catalog
 
 
 ROOT = Path(__file__).resolve().parent
@@ -81,10 +85,7 @@ def read_hoard_source(relative_path: str) -> str:
 
 
 def _live_request(path: str = "status", action: bool = False) -> dict[str, Any]:
-    request = urllib.request.Request(f"http://127.0.0.1:64320/api/scan/{path}",
-                                     data=b"" if action else None, method="POST" if action else "GET")
-    with urllib.request.urlopen(request, timeout=10) as response:
-        return json.load(response)
+    return runtime.request("scanner", f"api/scan/{path}", action, timeout=.4 if path == "status" else 10)
 
 
 @mcp.tool()
@@ -98,6 +99,11 @@ def start_live_scan(mode: str = "fixed", generation: str = "", subject: str = "p
 
 
 def _open_live_scan(mode: str, generation: str, subject: str, window: bool) -> dict[str, Any]:
+    with runtime.lifecycle():
+        return _open_live_scan_locked(mode, generation, subject, window)
+
+
+def _open_live_scan_locked(mode: str, generation: str, subject: str, window: bool) -> dict[str, Any]:
     if mode not in ("moving", "fixed") or subject not in ("person", "object"):
         raise ValueError("mode: moving/fixed; subject: person/object")
     generation = generation or ("360" if mode == "moving" else "one")
@@ -111,19 +117,10 @@ def _open_live_scan(mode: str, generation: str, subject: str, window: bool) -> d
         if (existing["mode"], existing["model"], existing["target"]) != (mode, generation, subject):
             raise ValueError("Hay otro escáner abierto; finaliza y cierra esa toma antes de cambiar de modo")
         return existing
-    process = subprocess.Popen([sys.executable, str(ROOT / "scanner_worker.py"), mode, generation, subject, "window" if window else "headless"], cwd=ROOT,
-                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                               creationflags=subprocess.CREATE_NO_WINDOW)
-    for _ in range(350):
-        try:
-            result = _live_request()
-            result["process_id"] = process.pid
-            return result
-        except OSError:
-            if process.poll() is not None:
-                raise RuntimeError(f"El escáner terminó con código {process.returncode}")
-            time.sleep(.2)
-    raise TimeoutError("El escáner no abrió su API local")
+    runtime.stop("camera")
+    return runtime.launch("scanner", lambda port: [sys.executable, str(ROOT / "scanner_worker.py"),
+                          mode, generation, subject, "window" if window else "headless", str(port)],
+                          "api/scan/status", _exe())
 
 
 @mcp.tool()
@@ -159,6 +156,112 @@ def open_studio() -> dict[str, Any]:
 
 
 @mcp.tool()
+def list_modes() -> list[dict[str, Any]]:
+    """List every studio mode, executable recipe, tools, source and Toolkit sample references."""
+    return mode_catalog(_catalog()["capabilities"])
+
+
+@mcp.tool()
+def start_camera(stream: str = "Color", generation: str = "one") -> dict[str, Any]:
+    """Start or switch a live camera stream; camera/Blender/OBS share this reader. Never starts on catalogue access."""
+    allowed = {"Color", "Depth", "Infrared", "LongExposureInfrared", "BodyIndex", "Skeleton", "BackgroundRemoved", "ColorDepth"}
+    if generation not in ("one", "360") or stream not in allowed:
+        raise ValueError("Sensor o flujo desconocido")
+    if generation == "360" and stream not in {"Color", "Depth", "Infrared", "ColorDepth"}:
+        raise ValueError("El backend libfreenect de 360 ofrece RGB, profundidad e IR. El cuerpo usa One.")
+    with runtime.lifecycle():
+        try:
+            current = runtime.request("camera", "api/health", timeout=.3)
+            if current.get("service") == "kinect-hoard-camera" and (current["sensor"], current["stream"]) == (generation, stream):
+                return current
+        except OSError:
+            pass
+        scan = live_scan_status()
+        if scan["state"] not in ("closed", "ready", "connecting", "finished", "error"):
+            raise ValueError("Hay un escaneo en curso. Páusalo, finaliza y desconecta antes de cambiar de modo.")
+        runtime.stop("scanner")
+        runtime.stop("camera")
+        return runtime.launch("camera", lambda port: [str(_exe()), "--webserver-model", generation, str(port), stream, "0"], "api/health", _exe(), seconds=12)
+
+
+@mcp.tool()
+def camera_status() -> dict[str, Any]:
+    """Read actual reader state, frame count, USB state and last error without opening a sensor."""
+    try:
+        result = runtime.request("camera", "api/health", timeout=.3)
+        return result if result.get("service") == "kinect-hoard-camera" else {"streaming": False, "state": "closed"}
+    except OSError:
+        return {"streaming": False, "state": "closed"}
+
+
+@mcp.tool()
+def get_live_frame() -> dict[str, Any]:
+    """Read live body joints in camera metres, depth pixel mapping, sequence and timestamp. Blender uses this contract."""
+    return runtime.request("camera", "api/frame")
+
+
+@mcp.tool()
+def close_camera() -> dict[str, Any]:
+    """Release the live stream and its sensor for another application."""
+    with runtime.lifecycle():
+        return runtime.stop("camera")
+
+
+@mcp.tool()
+def list_artifacts() -> list[dict[str, Any]]:
+    """List saved captures, recordings, geometry and scan assets, newest first; never returns pixels."""
+    if not CAPTURE_DIR.is_dir():
+        return []
+    extensions = {".khr", ".json", ".png", ".pgm", ".ply", ".obj", ".mtl", ".wav", ".txt"}
+    paths = [p for p in CAPTURE_DIR.rglob("*") if p.is_file() and p.suffix.lower() in extensions]
+    return [{"filename": p.relative_to(CAPTURE_DIR).as_posix(), "bytes": p.stat().st_size,
+             "modified": datetime.fromtimestamp(p.stat().st_mtime).isoformat()} for p in sorted(paths, key=lambda p: p.stat().st_mtime, reverse=True)]
+
+
+@mcp.tool()
+def open_demo(demo: str = "interaction") -> dict[str, Any]:
+    """Open a working native interaction gallery, sound/beam monitor, dual camera view or avatar, directly in its mode."""
+    if demo not in ("interaction", "audio", "dual", "avatar"):
+        raise ValueError("demo: interaction/audio/dual/avatar")
+    if live_scan_status()["state"] != "closed":
+        raise ValueError("Finaliza y desconecta el escáner antes de abrir esta vista")
+    close_camera()
+    process = subprocess.Popen([str(_exe()), "--demo", demo], cwd=ROOT, creationflags=subprocess.CREATE_NO_WINDOW)
+    return {"opened": True, "demo": demo, "process_id": process.pid}
+
+
+@mcp.tool()
+def replay_session(filename: str) -> dict[str, Any]:
+    """Open a recorded KHR without a sensor, with pause/step/PNG/raw/gesture/avatar controls."""
+    if Path(filename).name != filename or not filename.endswith(".khr") or not (CAPTURE_DIR / filename).is_file():
+        raise ValueError("Indica un archivo KHR existente en captures/")
+    process = subprocess.Popen([str(_exe()), "--replay-ui", str(CAPTURE_DIR / filename)], cwd=ROOT, creationflags=subprocess.CREATE_NO_WINDOW)
+    return {"opened": True, "filename": filename, "process_id": process.pid}
+
+
+@mcp.tool()
+def connect_blender(launch: bool = True, hoard_url: str = "http://127.0.0.1:64321") -> dict[str, Any]:
+    """Connect One skeleton to a live Blender armature; the Kinect panel can record animation keyframes."""
+    current = camera_status()
+    stream = current.get("stream") if current.get("sensor") == "one" and current.get("stream") in ("Skeleton", "ColorDepth") else "ColorDepth"
+    reader = start_camera(stream, "one")
+    script = ROOT / "integrations" / "blender_kinect.py"
+    candidates = sorted(Path(os.environ.get("ProgramFiles", r"C:\Program Files")).glob("Blender Foundation/Blender */blender.exe"), reverse=True)
+    result = {"reader": reader, "script_path": str(script), "endpoint": hoard_url.rstrip("/") + "/api/camera/frame", "launched": False}
+    if launch:
+        if not candidates:
+            raise FileNotFoundError("No se encontró Blender instalado; descarga el script y ejecútalo desde el editor de Blender")
+        runtime.DATA.mkdir(exist_ok=True)
+        log = runtime.DATA / "blender.log"
+        with log.open("w", encoding="utf-8") as output:
+            process = subprocess.Popen([str(candidates[0]), "--python", str(script)], cwd=ROOT,
+                                       stdout=output, stderr=subprocess.STDOUT,
+                                       env={**os.environ, "KINECT_HOARD_URL": hoard_url}, creationflags=subprocess.CREATE_NO_WINDOW)
+        result.update(launched=True, process_id=process.pid, log_path=str(log))
+    return result
+
+
+@mcp.tool()
 def sensor_status() -> str:
     """Read current USB and Kinect backend status without starting a camera stream."""
     CAPTURE_DIR.mkdir(exist_ok=True)
@@ -169,7 +272,30 @@ def sensor_status() -> str:
     return path.read_text(encoding="utf-8")
 
 
+def _camera_operation(function):
+    @wraps(function)
+    def run(*args, **kwargs):
+        previous = camera_status()
+        result = None
+        try:
+            with runtime.lifecycle():
+                if live_scan_status()["state"] != "closed":
+                    raise ValueError("Desconecta el escáner antes de esta captura para conservar la toma activa")
+                runtime.stop("camera")
+                result = function(*args, **kwargs)
+        finally:
+            if previous.get("streaming"):
+                try:
+                    start_camera(previous["stream"], previous["sensor"])
+                except (OSError, RuntimeError):
+                    if isinstance(result, dict):
+                        result["preview_note"] = "La captura se guardó; vuelve a conectar la vista previa"
+        return result
+    return run
+
+
 @mcp.tool()
+@_camera_operation
 def capture_artifact(kind: str, generation: str = "one") -> dict[str, Any]:
     """Capture one local artifact. Returns its path only; image or body contents are not sent to the model."""
     options = {
@@ -210,6 +336,7 @@ def capture_artifact(kind: str, generation: str = "one") -> dict[str, Any]:
 
 
 @mcp.tool()
+@_camera_operation
 def record_session(stream: str = "Depth", seconds: int = 10, generation: str = "one") -> dict[str, Any]:
     """Record up to 60 seconds at 5 fps in a local .khr file for offline debugging."""
     allowed = {"Color", "Depth", "Infrared", "LongExposureInfrared", "BodyIndex", "Skeleton", "BackgroundRemoved", "ColorDepth"}
@@ -232,6 +359,7 @@ def record_session(stream: str = "Depth", seconds: int = 10, generation: str = "
 
 
 @mcp.tool()
+@_camera_operation
 def record_audio(seconds: int = 10) -> dict[str, Any]:
     """Attempt Kinect One audio capture; report failure when the runtime produces no samples."""
     if not 1 <= seconds <= 60:
@@ -241,12 +369,15 @@ def record_audio(seconds: int = 10) -> dict[str, Any]:
     result = subprocess.run([str(_exe()), "--audio-record", str(path), str(seconds)], timeout=seconds + 20, capture_output=True)
     metadata_path = path.with_suffix(".json")
     metadata = json.loads(metadata_path.read_text(encoding="utf-8")) if metadata_path.is_file() else {}
-    if result.returncode != 0 or metadata.get("audio_bytes", 0) == 0:
+    if metadata.get("audio_bytes", 0) == 0:
         raise RuntimeError("El runtime no entregó muestras de audio; consulta docs/audio.md y el estado del sensor")
-    return {"path": str(path), "metadata_path": str(metadata_path), "bytes": path.stat().st_size}
+    return {"path": str(path), "metadata_path": str(metadata_path), "bytes": path.stat().st_size,
+            "complete": result.returncode == 0, "audio_seconds": metadata.get("audio_seconds"),
+            "requested_seconds": seconds}
 
 
 @mcp.tool()
+@_camera_operation
 def recognize_speech(seconds: int = 10) -> dict[str, Any]:
     """Record Kinect One audio locally and return recognized command events plus artifact paths."""
     if not 1 <= seconds <= 60:
@@ -262,6 +393,7 @@ def recognize_speech(seconds: int = 10) -> dict[str, Any]:
 
 
 @mcp.tool()
+@_camera_operation
 def analyze_face(generation: str = "one") -> dict[str, Any]:
     """Capture RGB from One or 360 and return frontal face rectangles and local artifact paths."""
     if generation not in ("one", "360"):
@@ -285,6 +417,7 @@ def analyze_face(generation: str = "one") -> dict[str, Any]:
 
 
 @mcp.tool()
+@_camera_operation
 def capture_face3d(seconds: int = 15) -> dict[str, Any]:
     """Capture a local Kinect One HD face mesh and report geometry metadata without returning facial data."""
     if not 1 <= seconds <= 60:
@@ -305,6 +438,7 @@ def capture_face3d(seconds: int = 15) -> dict[str, Any]:
 
 
 @mcp.tool()
+@_camera_operation
 def scan_head(seconds: int = 90) -> dict[str, Any]:
     """Collect multiple face views to build a personalized local Kinect One HD face model."""
     if not 10 <= seconds <= 120:
@@ -330,6 +464,7 @@ def scan_head(seconds: int = 90) -> dict[str, Any]:
 
 
 @mcp.tool()
+@_camera_operation
 def capture_gestures(seconds: int = 10) -> dict[str, Any]:
     """Capture Kinect One skeleton frames and return local gesture events and a JSON report path."""
     if not 1 <= seconds <= 60:
@@ -383,6 +518,7 @@ def _foreground_options(max_depth: float | None, roi: list[int] | None) -> list[
 
 
 @mcp.tool()
+@_camera_operation
 def scan_3d(seconds: int = 15, tracking: str = "auto", generation: str = "one",
             foreground_max_depth: float | None = None, roi: list[int] | None = None) -> dict[str, Any]:
     """Record synchronized RGBD from Kinect One or 360 and reconstruct a colored TSDF mesh locally."""
@@ -435,6 +571,7 @@ def fuse_session(filename: str, tracking: str = "auto",
 
 
 @mcp.tool()
+@_camera_operation
 def scan_textured(seconds: int = 15, generation: str = "one", tracking: str = "auto",
                   texture_size: int = 2048, max_triangles: int = 100_000) -> dict[str, Any]:
     """Record One or 360 RGBD and export an OBJ, MTL, PNG atlas, PLY and quality report."""
@@ -463,6 +600,7 @@ def scan_textured(seconds: int = 15, generation: str = "one", tracking: str = "a
 
 
 @mcp.tool()
+@_camera_operation
 def scan_dual_textured(extrinsics_filename: str, seconds: int = 15,
                        texture_size: int = 2048, max_triangles: int = 100_000) -> dict[str, Any]:
     """Capture One and 360 concurrently and fuse a textured OBJ using measured extrinsics."""

@@ -2,7 +2,10 @@
 <!-- impeccable:product-schema 1 -->
 
 ## Scope
-Kinect Hoard is the local Windows Kinect studio and 3D scanner. Luis asked for
+Kinect Hoard is a menu of working Kinect modes and reusable reference implementations,
+not a scanner-only landing page. Camera, body/avatar/Blender, scanner, face,
+audio/voice, gestures/games, geometry, recording/replay, bridges and diagnostics
+must all remain visible, with executable operations and shared MCP tools. Luis asked for
 a scanner with real-time growing textured mesh, movable camera and fixed camera
 modes. Current priority is One fixed on a tripod, with a person turning naturally.
 He rejected earlier voxelated, split, artifact-filled busts; quality is not accepted.
@@ -18,6 +21,9 @@ publishes the same operations through stdio MCP and the common HTTP agent contra
 Luis operates camera preview, starts, pauses and finishes scans, inspects the
 colored surface and exports OBJ/MTL/PNG. Faustus and other agents use the same
 capabilities. Opening the interface, catalogue or MCP must not start a camera.
+The top-level catalogue covers all 26 documented capabilities. A logo identifies
+the Hoard in its header and Hub entry. No placeholder modes or hidden native menu
+items substitute for a discoverable, executable workflow.
 
 ## Visual direction
 An ordinary Hoard in the existing family: shared HoardLink charcoal theme, serif

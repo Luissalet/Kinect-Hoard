@@ -6,6 +6,7 @@
     <Nullable>disable</Nullable>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <PlatformTarget>x64</PlatformTarget>
+    <ApplicationIcon>..\app-icon.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <None Include="..\speech-commands.txt" Link="speech-commands.txt" CopyToOutputDirectory="PreserveNewest" />
