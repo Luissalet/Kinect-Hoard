@@ -14,7 +14,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from fusion import frames
+from fusion import frames, reconstruction_intrinsics
 
 
 @dataclass
@@ -30,15 +30,12 @@ class ScanFrame:
 
 
 def _intrinsics(path, o3d):
-    metadata = json.loads(path.with_suffix(".intrinsics.json").read_text(encoding="utf-8"))
-    if metadata.get("format") != "KINECT_HOARD_RGBD_1":
-        raise ValueError(f"Calibración RGBD incompatible: {path}")
-    data = metadata["intrinsics"]
+    data, mirrored = reconstruction_intrinsics(path)
     width, height = int(data["width"]), int(data["height"])
     fx, fy, cx, cy = (float(data[key]) for key in ("fx", "fy", "cx", "cy"))
     if width < 1 or height < 1 or min(fx, fy) <= 0 or not all(map(math.isfinite, (fx, fy, cx, cy))):
         raise ValueError(f"Intrínsecos inválidos: {path}")
-    return o3d.camera.PinholeCameraIntrinsic(width, height, fx, fy, cx, cy), data
+    return o3d.camera.PinholeCameraIntrinsic(width, height, fx, fy, cx, cy), data, mirrored
 
 
 def _measured_extrinsics(path, np):
@@ -93,7 +90,7 @@ def _filter_depth(depth, edge_mm, foreground_max_depth, roi, np):
 
 
 def _load_session(path, sensor, tracking, max_frames, depth_limit, edge_mm, roi, np, o3d):
-    intrinsic, intrinsics_data = _intrinsics(path, o3d)
+    intrinsic, intrinsics_data, mirrored = _intrinsics(path, o3d)
     width, height = intrinsic.width, intrinsic.height
     odometry = o3d.pipelines.odometry
     option = odometry.OdometryOption()
@@ -111,12 +108,16 @@ def _load_session(path, sensor, tracking, max_frames, depth_limit, edge_mm, roi,
         if (fw, fh) != (width, height):
             raise ValueError(f"Dimensiones de {path} distintas de sus intrínsecos")
         raw = np.frombuffer(depth_bytes, dtype="<u2").reshape(height, width)
+        if mirrored:
+            raw = raw[:, ::-1].copy()
         depth = _filter_depth(raw, edge_mm, depth_limit, roi, np)
         if np.count_nonzero(depth) < 1000:
             lost += 1
             continue
         bgra_array = np.frombuffer(bgra, dtype=np.uint8).reshape(height, width, 4)
         rgb = bgra_array[:, :, [2, 1, 0]].copy()
+        if mirrored:
+            rgb = rgb[:, ::-1].copy()
         rgbd = o3d.geometry.RGBDImage.create_from_color_and_depth(
             o3d.geometry.Image(rgb), o3d.geometry.Image(depth),
             depth_scale=1000.0, depth_trunc=depth_limit, convert_rgb_to_intensity=False,
@@ -149,6 +150,9 @@ def _load_session(path, sensor, tracking, max_frames, depth_limit, edge_mm, roi,
         if full_bgra:
             full_rgb = np.frombuffer(full_bgra, dtype=np.uint8).reshape(color_height, color_width, 4)[:, :, [2, 1, 0]].copy()
             depth_to_color = np.frombuffer(map_bytes, dtype="<f4").reshape(height, width, 2).copy()
+            if mirrored:
+                # The full RGB stays native; this map now addresses canonical depth pixels.
+                depth_to_color = depth_to_color[:, ::-1].copy()
         accepted.append(ScanFrame(timestamp, rgb, depth, rgbd, pose.copy(), sensor, full_rgb, depth_to_color))
     if not accepted:
         raise ValueError(f"Ningún fotograma RGBD válido en {path}")
@@ -188,6 +192,7 @@ def _load_session(path, sensor, tracking, max_frames, depth_limit, edge_mm, roi,
     return accepted, intrinsic, {
         "session": str(path), "sensor": sensor, "intrinsics_method": intrinsics_data.get("method"),
         "frames_seen": seen, "frames_accepted": len(accepted), "tracking_losses": lost,
+        "horizontal_flip_applied": mirrored,
         "loop_edges": loop_edges,
     }
 

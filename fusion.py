@@ -86,6 +86,26 @@ def frames(path: Path, with_quality: bool = False) -> Iterator[tuple]:
                 yield timestamp, width, height, bgra, depth
 
 
+def reconstruction_intrinsics(session: Path) -> tuple[dict, bool]:
+    """Normalize SDK-mirrored images to a common optical coordinate system."""
+    metadata = json.loads(session.with_suffix(".intrinsics.json").read_text(encoding="utf-8"))
+    if metadata.get("format") != "KINECT_HOARD_RGBD_1":
+        raise ValueError("Calibración RGBD incompatible")
+    parameters = dict(metadata["intrinsics"])
+    orientation = metadata.get("image_orientation")
+    if orientation is None:
+        orientation = "mirrored_x" if parameters.get("method") in (
+            "Kinect SDK depth camera intrinsics",
+            "Pinhole fit to SDK MapDepthFrameToCameraSpace (distortion omitted)",
+        ) else "camera"
+    if orientation not in ("camera", "mirrored_x"):
+        raise ValueError("Orientación RGBD desconocida")
+    mirrored = orientation == "mirrored_x"
+    if mirrored:
+        parameters["cx"] = int(parameters["width"]) - 1 - float(parameters["cx"])
+    return parameters, mirrored
+
+
 def fuse(session: Path, output: Path, report_path: Path, voxel: float, tracking: str, max_frames: int,
          foreground_max_depth: float | None = None,
          roi: tuple[int, int, int, int] | None = None) -> dict:
@@ -97,11 +117,7 @@ def fuse(session: Path, output: Path, report_path: Path, voxel: float, tracking:
     if o3d.__version__ != "0.19.0":
         raise RuntimeError("Fusion requiere Open3D 0.19.0; ejecuta setup-scan.ps1")
 
-    metadata_path = session.with_suffix(".intrinsics.json")
-    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-    if metadata.get("format") != "KINECT_HOARD_RGBD_1":
-        raise ValueError("Calibración RGBD incompatible")
-    parameters = metadata["intrinsics"]
+    parameters, mirrored = reconstruction_intrinsics(session)
     width, height = int(parameters["width"]), int(parameters["height"])
     fx, fy = float(parameters["fx"]), float(parameters["fy"])
     cx, cy = float(parameters["cx"]), float(parameters["cy"])
@@ -134,6 +150,8 @@ def fuse(session: Path, output: Path, report_path: Path, voxel: float, tracking:
         if (frame_width, frame_height) != (width, height):
             raise ValueError("Las dimensiones de la sesión difieren de la calibración")
         depth = np.frombuffer(raw_depth, dtype="<u2").reshape(height, width).copy()
+        if mirrored:
+            depth = depth[:, ::-1].copy()
         if foreground_max_depth is not None:
             depth[depth > int(foreground_max_depth * 1000)] = 0
         if roi is not None:
@@ -146,6 +164,8 @@ def fuse(session: Path, output: Path, report_path: Path, voxel: float, tracking:
             lost += 1
             continue
         color = np.frombuffer(bgra, dtype=np.uint8).reshape(height, width, 4)[:, :, :3][:, :, ::-1].copy()
+        if mirrored:
+            color = color[:, ::-1].copy()
         rgbd = o3d.geometry.RGBDImage.create_from_color_and_depth(
             o3d.geometry.Image(color), o3d.geometry.Image(depth),
             depth_scale=1000.0, depth_trunc=depth_limit, convert_rgb_to_intensity=False,
@@ -187,7 +207,7 @@ def fuse(session: Path, output: Path, report_path: Path, voxel: float, tracking:
         "foreground_max_depth_metres": foreground_max_depth,
         "roi_depth_pixels": list(roi) if roi is not None else None,
         "bounds_min_metres": bounds.min_bound.tolist(), "bounds_max_metres": bounds.max_bound.tolist(),
-        "intrinsics_method": parameters.get("method"), "poses": poses,
+        "intrinsics_method": parameters.get("method"), "horizontal_flip_applied": mirrored, "poses": poses,
     }
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -226,7 +246,7 @@ def main() -> None:
             parser.error("--view requiere únicamente una malla PLY existente")
         import numpy as np
         import open3d as o3d
-        mesh = o3d.io.read_triangle_mesh(str(args.view))
+        mesh = o3d.io.read_triangle_mesh(str(args.view), enable_post_processing=True)
         if not mesh.has_triangles():
             raise ValueError("El archivo PLY no contiene una malla triangular")
         if not mesh.has_vertex_normals():
@@ -248,7 +268,7 @@ def main() -> None:
             options.background_color = np.array([0.06, 0.07, 0.09])
             # Untextured meshes (including the HD face model) need lighting to
             # make their surface relief visible; RGB scans retain their colors.
-            options.light_on = not mesh.has_vertex_colors()
+            options.light_on = not (mesh.has_vertex_colors() or mesh.has_textures())
             options.mesh_show_back_face = True
             viewer.run()
         finally:
