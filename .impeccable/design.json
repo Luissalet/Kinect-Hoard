@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-19T03:00:00Z",
+  "title": "Design System: Kinect Hoard",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "Kinect Mint",
+        "tonalRamp": ["oklch(15% 0.07 175)", "oklch(26% 0.07 175)", "oklch(38% 0.07 175)", "oklch(49% 0.07 175)", "oklch(61% 0.07 175)", "oklch(72% 0.07 175)", "oklch(84% 0.07 175)", "oklch(95% 0.07 175)"]
+      }
+    },
+    "typographyMeta": {
+      "body": { "displayName": "Working text", "purpose": "Shared sans stack for instructions and controls; no font download is supplied by this surface." },
+      "label": { "displayName": "Field label", "purpose": "Muted labels above sensor, movement and subject selects." }
+    },
+    "breakpoints": [{ "name": "stacked-workspace", "value": "800px" }],
+    "focus": { "outline": "2px solid var(--hoard-accent)", "outlineOffset": "3px" },
+    "disabled": { "opacity": 0.46 },
+    "provenance": {
+      "sources": ["ui/scanner.html", "hoard_server.py", "HoardLink/hoard_link/ui/hoard-theme.css"],
+      "captures": [".impeccable/review/selection-360.png", ".impeccable/review/mobile.png"],
+      "visualReview": "ship; both contextual-label fixes resolved",
+      "scope": "Web surface only. Native studio preserved. Scan quality is not accepted.",
+      "tonalRamp": "Display-only synthesized ramp, not a set of implemented CSS tokens."
+    }
+  },
+  "components": [
+    {
+      "name": "Primary action",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Start scanning after camera connection.",
+      "html": "<button class=\"ds-primary\">Iniciar escaneo</button>",
+      "css": ".ds-primary{font:600 16px/1.45 var(--hoard-font-sans);min-height:42px;padding:9px 13px;border:1px solid var(--hoard-accent);border-radius:var(--hoard-radius-sm);background:var(--hoard-accent);color:var(--hoard-accent-ink);cursor:pointer}.ds-primary:hover:enabled{background:var(--hoard-accent-strong)}.ds-primary:focus-visible{outline:2px solid var(--hoard-accent);outline-offset:3px}.ds-primary:disabled{opacity:.46;cursor:default}"
+    },
+    {
+      "name": "Ordinary action",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Explicit connection and ordinary scanner controls.",
+      "html": "<button class=\"ds-secondary\">Conectar cámara</button>",
+      "css": ".ds-secondary{font:16px/1.45 var(--hoard-font-sans);min-height:42px;padding:9px 13px;border:1px solid var(--hoard-border);border-radius:var(--hoard-radius-sm);background:var(--hoard-elevated);color:var(--hoard-text);cursor:pointer}.ds-secondary:hover:enabled{background:var(--hoard-hover);border-color:var(--hoard-border-hover)}.ds-secondary:focus-visible{outline:2px solid var(--hoard-accent);outline-offset:3px}.ds-secondary:disabled{opacity:.46;cursor:default}"
+    },
+    {
+      "name": "Labeled selector",
+      "kind": "input",
+      "description": "Sensor selection before opening the camera.",
+      "html": "<label class=\"ds-label\">Sensor<select class=\"ds-select\"><option>Kinect One</option><option>Kinect 360</option></select></label>",
+      "css": ".ds-label{display:grid;gap:6px;font:13px/1.45 var(--hoard-font-sans);color:var(--hoard-text-muted)}.ds-select{font:16px/1.45 var(--hoard-font-sans);min-width:160px;min-height:42px;padding:9px 13px;border:1px solid var(--hoard-border);border-radius:var(--hoard-radius-sm);background:var(--hoard-elevated);color:var(--hoard-text)}.ds-select:focus-visible{outline:2px solid var(--hoard-accent);outline-offset:3px}"
+    },
+    {
+      "name": "Family navigation",
+      "kind": "nav",
+      "description": "Links to the local family hub and agent interfaces.",
+      "html": "<nav class=\"ds-nav\" aria-label=\"Herramientas\"><a href=\"http://127.0.0.1:8810/\">Hoard Hub</a><a href=\"/docs\">API</a><a href=\"/api/agent/tools\">Herramientas MCP</a></nav>",
+      "css": ".ds-nav{display:flex;align-items:center;flex-wrap:wrap;gap:20px}.ds-nav a{font:14px/1.45 var(--hoard-font-sans);color:var(--hoard-text-muted);text-underline-offset:4px;white-space:nowrap}.ds-nav a:focus-visible{outline:2px solid var(--hoard-accent);outline-offset:3px}"
+    },
+    {
+      "name": "Empty image viewport",
+      "kind": "custom",
+      "refersTo": "viewport",
+      "description": "Contained camera or reconstructed-surface imagery with contextual empty text.",
+      "html": "<div class=\"ds-viewport\"><div class=\"ds-empty\">La superficie aparecerá aquí al iniciar el escaneo.</div></div>",
+      "css": ".ds-viewport{display:grid;place-items:center;aspect-ratio:4/3;overflow:hidden;background:var(--hoard-sunken);border:1px solid var(--hoard-border);border-radius:var(--hoard-radius)}.ds-empty{max-width:38ch;padding:30px;text-align:center;font:16px/1.45 var(--hoard-font-sans);color:var(--hoard-text-dim)}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Hoard Family Workbench",
+    "overview": "This web surface extends the existing Hoard family: charcoal working surfaces, a mint Kinect accent, serif identity and readable sans controls. It gives camera and reconstruction imagery most of the available space. The native Windows studio remains a separate, preserved interface, opened explicitly from the web header.\n\nThe source of truth is `ui/scanner.html` plus the shared HoardLink `hoard_link/ui/hoard-theme.css`, served by `hoard_server.py`. This document records that web implementation; it does not prescribe a native studio redesign.",
+    "keyCharacteristics": ["Shared family identity with a restrained Kinect accent.", "Flat working surfaces and clear control states.", "Large camera and colored-surface views."],
+    "rules": [
+      { "name": "The Family Palette Rule", "body": "Consume the shared Hoard theme and keep the Kinect mint override local to this app. Preserve the official Faustus launcher's own mark and color instead of recoloring it as a scanner control.", "section": "colors" },
+      { "name": "The Identity and Work Rule", "body": "Reserve the serif treatment for identity; keep task titles, instructions and controls in the shared sans stack.", "section": "typography" }
+    ],
+    "dos": ["Do extend the shared Hoard family theme and preserve the native studio entry.", "Do keep control labels accurate for the selected sensor and subject.", "Do expose camera state, disabled actions and experimental tracking limits."],
+    "donts": ["Don't add slogans or substitute a new visual identity for the family theme.", "Don't present export completion or UI review as acceptance of scan quality."]
+  }
+}

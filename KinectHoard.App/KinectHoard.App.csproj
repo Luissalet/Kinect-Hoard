@@ -5,6 +5,7 @@
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <PlatformTarget>x64</PlatformTarget>
   </PropertyGroup>
   <ItemGroup>
     <None Include="..\speech-commands.txt" Link="speech-commands.txt" CopyToOutputDirectory="PreserveNewest" />
@@ -17,9 +18,17 @@
     <Reference Include="System.Runtime.Serialization" />
     <Reference Include="System.Speech" />
     <Reference Include="System.Web.Extensions" />
+    <Reference Include="System.Numerics" />
+    <Reference Include="Microsoft.Kinect">
+      <HintPath>C:\Windows\Microsoft.NET\assembly\GAC_64\Microsoft.Kinect\v4.0_2.0.0.0__31bf3856ad364e35\Microsoft.Kinect.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Content Include="$(NuGetPackageRoot)microsoft.kinect.fusion.x64\2.0.1410.19000\content\Kinect20.Fusion.dll" Link="Kinect20.Fusion.dll" CopyToOutputDirectory="PreserveNewest" />
     <ProjectReference Include="..\KinectHoard.Core\KinectHoard.Core.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="OpenCvSharp4.Windows.Slim" Version="4.13.0.20260627" />
+    <PackageReference Include="Microsoft.Kinect.Fusion.x64" Version="2.0.1410.19000" />
+    <PackageReference Include="Microsoft.Kinect" Version="2.0.1410.19000" ExcludeAssets="all" />
   </ItemGroup>
 </Project>

@@ -4,6 +4,19 @@ Estudio local para explorar, depurar y reutilizar capacidades Kinect. Detecta Ki
 
 ## Ejecutar
 
+Desde **Hoard Hub**, abre **Kinect Hoard**. Su interfaz usa el tema compartido de
+la familia, el acceso común a Faustus y el mismo catálogo de herramientas que MCP.
+Arranca bajo demanda: abrir la interfaz no enciende el sensor. **Conectar cámara**
+abre la vista previa y **Iniciar escaneo** comienza a integrar.
+
+El flujo inicial es **One · Cámara fija · Persona**. La máscara corporal separa
+el fondo; la superficie con color crece en directo y **Finalizar y texturizar**
+exporta OBJ, MTL y PNG. El seguimiento es experimental: el giro natural completo
+de una persona **todavía no está validado** y no hay corrección no rígida de
+postura. Consulta [escáner en directo](docs/live-scanner.md) para los controles,
+las salidas reales y las limitaciones. La aplicación nativa y sus herramientas
+anteriores siguen disponibles con el comando de abajo.
+
 En PowerShell, desde esta carpeta:
 
 ```powershell

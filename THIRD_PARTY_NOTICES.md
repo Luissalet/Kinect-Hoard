@@ -1,5 +1,7 @@
 # Componentes de terceros del paquete Kinect Hoard
 
+- **Microsoft.Kinect.Fusion.x64 2.0.1410.19000** (`Microsoft.Kinect.Fusion.dll` y `Kinect20.Fusion.dll`): motor de reconstrucción del SDK 2.0, publicado por KinectForWindowsTeam en [NuGet](https://www.nuget.org/packages/Microsoft.Kinect.Fusion.x64/2.0.1410.19000). Su uso está sujeto a los [términos del SDK 2.0 de Microsoft](https://download.microsoft.com/download/0/D/C/0DC5308E-36A7-4DCD-B299-B01CDFC8E345/Kinect-SDK2.0-EULA_en-US.pdf). No se incluye código de los motores investigados con licencias GPL o de investigación; las referencias de `docs/scanner-research.md` se documentan como investigación.
+
 - **OpenCvSharp4.Windows.Slim 4.13.0.20260627** (biblioteca administrada y `OpenCvSharpExtern.dll`): licencia Apache 2.0. Texto en `licenses/OpenCvSharp-LICENSE.txt`; proyecto: <https://github.com/shimat/opencvsharp>.
 - **OpenCV** (incluido por el paquete anterior): licencia Apache 2.0. Texto en `licenses/OpenCV-LICENSE.txt`; proyecto: <https://github.com/opencv/opencv>.
 - **haarcascade_frontalface_default.xml**: distribuye el aviso de licencia Intel en la cabecera del propio XML; origen: <https://github.com/opencv/opencv/blob/4.x/data/haarcascades/haarcascade_frontalface_default.xml>.

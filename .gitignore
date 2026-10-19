@@ -12,6 +12,8 @@ diagnostico-*.txt
 .venv/
 .venv-scan/
 captures/
+data/
+.impeccable/review/
 captura-*.json
 captura-*.ply
 captura-*.khr

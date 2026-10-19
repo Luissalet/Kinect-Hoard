@@ -19,6 +19,29 @@ namespace KinectHoard.App
         [STAThread]
         private static int Main(string[] args)
         {
+            if (args.Length == 4 && args[0] == "--scanner-server")
+            {
+                var scanner = new FusionScanner(ParseModel(args[2]), args[1], args[3], Path.Combine(ScannerExport.Root(), "captures", "live-" + DateTime.Now.ToString("yyyyMMdd-HHmmss-fff")));
+                return CameraStreamServer.Run(64320, StreamKind.ColorDepth, 0, scanner.Model, true, scanner);
+            }
+            if (args.Length == 6 && args[0] == "--scanner-replay")
+            {
+                try { return FusionScanner.Replay(args[1], ParseModel(args[2]), args[3], args[4], args[5] == "cpu"); }
+                catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
+            }
+            if (args.Length == 4 && args[0] == "--scanner")
+            {
+                Application.EnableVisualStyles(); Application.SetCompatibleTextRenderingDefault(false);
+                Application.Run(new LiveScannerForm(args[1], ParseModel(args[2]), args[3])); return 0;
+            }
+            if (args.Length == 6 && args[0] == "--scanner-probe")
+            {
+                var scanner = new FusionScanner(ParseModel(args[1]), args[2], args[3], args[4]);
+                scanner.Command("start");
+                return CameraStreamServer.Run(64320, StreamKind.ColorDepth, int.Parse(args[5]), ParseModel(args[1]), true, scanner);
+            }
+            if (args.Length == 4 && args[0] == "--rgbd-server")
+                return CameraStreamServer.Run(int.Parse(args[2]), StreamKind.ColorDepth, int.Parse(args[3]), ParseModel(args[1]), true);
             if (args.Length == 2 && args[0] == "--diagnose") return Diagnose(args[1]);
             if (args.Length == 4 && args[0] == "--stress")
                 return Stress(args[1], int.Parse(args[2]), ParseStream(args[3]));
@@ -859,6 +882,8 @@ namespace KinectHoard.App
             faceMenu.DropDownItems.Add("Escanear modelo facial personalizado (hasta 90 s)...", null, async (s, e) => await CaptureFace3DFromUi(true));
             menu.Items.Add(faceMenu);
             var geometryMenu = new ToolStripMenuItem("Geometría");
+            geometryMenu.DropDownItems.Add("Escáner en directo: cámara móvil...", null, (s, e) => OpenLiveScanner("moving"));
+            geometryMenu.DropDownItems.Add("Escáner en directo: cámara fija...", null, (s, e) => OpenLiveScanner("fixed"));
             geometryMenu.DropDownItems.Add("Exportar malla PLY...", null, (s, e) => SaveMesh());
             geometryMenu.DropDownItems.Add("Fusion: escanear 15 segundos...", null, async (s, e) => await Scan3D());
             geometryMenu.DropDownItems.Add("Escáner con textura OBJ (15 segundos)...", null, async (s, e) => await Scan3D(true));
@@ -1213,6 +1238,12 @@ namespace KinectHoard.App
                     pendingMeshPath = dialog.FileName;
                     SetStatus("Esperando el siguiente fotograma de profundidad para exportar malla...");
                 }
+        }
+
+        private void OpenLiveScanner(string mode)
+        {
+            StopCamera();
+            using (var scanner = new LiveScannerForm(mode, mode == "moving" ? "360" : "one")) scanner.ShowDialog(this);
         }
 
         private async Task Scan3D(bool quality = false, bool dual = false)

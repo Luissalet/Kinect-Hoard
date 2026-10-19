@@ -215,6 +215,10 @@ def fuse(session: Path, output: Path, report_path: Path, voxel: float, tracking:
 
 
 def main() -> None:
+    if len(sys.argv) == 3 and sys.argv[1] == "--texture-live":
+        from quality_scan import texture_live
+        print(texture_live(Path(sys.argv[2]))["obj"])
+        return
     if "--calibrate" in sys.argv[1:]:
         sys.argv.remove("--calibrate")
         from dual_calibration import main as calibration_main

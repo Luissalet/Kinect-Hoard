@@ -36,8 +36,10 @@ namespace KinectHoard.Core
             writer.Write(frame.Values == null ? 0 : frame.Values.Length);
             if (frame.Values != null)
                 foreach (ushort value in frame.Values) writer.Write(value);
-            writer.Write(frame.Bodies == null ? 0 : frame.Bodies.Length);
-            if (frame.Bodies != null)
+            // RGBD readers may also supply body labels for live segmentation.
+            // The portable RGBD archive contract stores joints only in Skeleton.
+            writer.Write(Stream != StreamKind.Skeleton || frame.Bodies == null ? 0 : frame.Bodies.Length);
+            if (Stream == StreamKind.Skeleton && frame.Bodies != null)
                 foreach (TrackedBody body in frame.Bodies)
                 {
                     writer.Write(body.TrackingId);

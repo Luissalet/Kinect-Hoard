@@ -64,7 +64,7 @@ namespace KinectHoard.Driver.One
                 else if (stream == StreamKind.BackgroundRemoved)
                     multiReader = sensor.OpenMultiSourceFrameReader(FrameSourceTypes.Color | FrameSourceTypes.Depth | FrameSourceTypes.BodyIndex);
                 else if (stream == StreamKind.ColorDepth)
-                    multiReader = sensor.OpenMultiSourceFrameReader(FrameSourceTypes.Color | FrameSourceTypes.Depth);
+                    multiReader = sensor.OpenMultiSourceFrameReader(FrameSourceTypes.Color | FrameSourceTypes.Depth | FrameSourceTypes.BodyIndex | FrameSourceTypes.Body);
                 else throw new NotSupportedException("Flujo no implementado: " + stream);
                 if (reader == null && depthReader == null && infraredReader == null && longInfraredReader == null && bodyIndexReader == null && bodyReader == null && multiReader == null)
                     throw new InvalidOperationException("No se pudo abrir el flujo solicitado.");
@@ -345,6 +345,16 @@ namespace KinectHoard.Driver.One
                     cloud = new PointCloudFrame { Width = width, Height = height, Xyz = xyz, Rgb = rgb };
                     image = new CameraFrame { Width = width, Height = height, Bgra = pixels, Values = values,
                         Kind = StreamKind.ColorDepth, TimestampUtc = DateTime.UtcNow };
+                    using (var index = multi.BodyIndexFrameReference.AcquireFrame())
+                    using (var bodyFrame = multi.BodyFrameReference.AcquireFrame())
+                    {
+                        if (index != null)
+                        {
+                            image.BodyIndices = new byte[count];
+                            index.CopyFrameDataToArray(image.BodyIndices);
+                        }
+                        if (bodyFrame != null) image.Bodies = ReadTrackedBodies(bodyFrame);
+                    }
                     if (qualityColor)
                     {
                         image.FullColorWidth = colorWidth;
@@ -358,6 +368,28 @@ namespace KinectHoard.Driver.One
                     return true;
                 }
             }
+        }
+
+        private TrackedBody[] ReadTrackedBodies(BodyFrame frame)
+        {
+            if (bodies == null) bodies = new Body[sensor.BodyFrameSource.BodyCount];
+            frame.GetAndRefreshBodyData(bodies);
+            var tracked = new List<TrackedBody>();
+            for (int index = 0; index < bodies.Length; index++)
+            {
+                var body = bodies[index];
+                if (body == null || !body.IsTracked) continue;
+                var joints = new List<BodyJoint>();
+                foreach (var pair in body.Joints)
+                {
+                    var pixel = sensor.CoordinateMapper.MapCameraPointToDepthSpace(pair.Value.Position);
+                    joints.Add(new BodyJoint { Name = pair.Key.ToString(), X = pair.Value.Position.X,
+                        Y = pair.Value.Position.Y, Z = pair.Value.Position.Z, DepthX = pixel.X,
+                        DepthY = pixel.Y, TrackingState = (int)pair.Value.TrackingState });
+                }
+                tracked.Add(new TrackedBody { TrackingId = body.TrackingId, BodyIndex = index, Joints = joints.ToArray() });
+            }
+            return tracked.ToArray();
         }
 
         public void Close()

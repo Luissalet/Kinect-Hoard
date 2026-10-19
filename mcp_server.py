@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 import json
+import math
 import subprocess
+import sys
+import time
+import urllib.request
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -74,6 +78,84 @@ def read_hoard_source(relative_path: str) -> str:
     if len(content) > 80_000:
         return content[:80_000] + "\n[truncado: consulta el archivo local para más contexto]"
     return content
+
+
+def _live_request(path: str = "status", action: bool = False) -> dict[str, Any]:
+    request = urllib.request.Request(f"http://127.0.0.1:64320/api/scan/{path}",
+                                     data=b"" if action else None, method="POST" if action else "GET")
+    with urllib.request.urlopen(request, timeout=10) as response:
+        return json.load(response)
+
+
+@mcp.tool()
+def start_live_scan(mode: str = "fixed", generation: str = "", subject: str = "person") -> dict[str, Any]:
+    """Open the native live scanner. moving: handheld camera; fixed: subject moves before the camera.
+
+    Defaults to 360 for moving and One for fixed. Both modes support person and
+    object. Starts in preview; use control_live_scan('start') once positioned.
+    """
+    return _open_live_scan(mode, generation, subject, window=True)
+
+
+def _open_live_scan(mode: str, generation: str, subject: str, window: bool) -> dict[str, Any]:
+    if mode not in ("moving", "fixed") or subject not in ("person", "object"):
+        raise ValueError("mode: moving/fixed; subject: person/object")
+    generation = generation or ("360" if mode == "moving" else "one")
+    if generation not in ("one", "360"):
+        raise ValueError("generation: one/360")
+    try:
+        existing = _live_request()
+    except OSError:
+        existing = None
+    if existing is not None:
+        if (existing["mode"], existing["model"], existing["target"]) != (mode, generation, subject):
+            raise ValueError("Hay otro escáner abierto; finaliza y cierra esa toma antes de cambiar de modo")
+        return existing
+    process = subprocess.Popen([sys.executable, str(ROOT / "scanner_worker.py"), mode, generation, subject, "window" if window else "headless"], cwd=ROOT,
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                               creationflags=subprocess.CREATE_NO_WINDOW)
+    for _ in range(350):
+        try:
+            result = _live_request()
+            result["process_id"] = process.pid
+            return result
+        except OSError:
+            if process.poll() is not None:
+                raise RuntimeError(f"El escáner terminó con código {process.returncode}")
+            time.sleep(.2)
+    raise TimeoutError("El escáner no abrió su API local")
+
+
+@mcp.tool()
+def live_scan_status() -> dict[str, Any]:
+    """Read native scanner mode, camera, live tracking, export paths and actual limitations."""
+    try:
+        return _live_request()
+    except urllib.error.URLError:
+        return {"state": "closed", "detail": "Escáner cerrado. Ábrelo cuando vayas a utilizarlo."}
+
+
+@mcp.tool()
+def control_live_scan(action: str, x: float = 0, y: float = 0) -> dict[str, Any]:
+    """Control start/pause/finish/close, select (normalized image x/y), orbit (radian deltas), or follow.
+
+    finish exports the native mesh and an OBJ/MTL/PNG atlas from original RGB.
+    Poll live_scan_status until finished; an accepted command is not a completed export.
+    """
+    if action not in ("start", "pause", "finish", "select", "orbit", "follow", "close"):
+        raise ValueError("Acción de escáner desconocida")
+    if not math.isfinite(x) or not math.isfinite(y):
+        raise ValueError("Coordenadas no finitas")
+    return _live_request(f"{action}?x={x}&y={y}", True)
+
+
+@mcp.tool()
+def open_studio() -> dict[str, Any]:
+    """Open the Kinect studio: camera streams, recording, face, audio, gestures and geometry."""
+    if live_scan_status()["state"] != "closed":
+        raise ValueError("Desconecta el escáner antes de abrir el estudio para liberar la cámara")
+    process = subprocess.Popen([str(_exe())], cwd=ROOT, creationflags=subprocess.CREATE_NO_WINDOW)
+    return {"process_id": process.pid, "opened": True}
 
 
 @mcp.tool()
@@ -279,11 +361,11 @@ def analyze_gesture_session(filename: str) -> dict[str, Any]:
 
 def _scan_command() -> list[str]:
     bundled = ROOT / "KinectHoard.Fusion.exe"
-    if bundled.is_file():
-        return [str(bundled)]
     python = ROOT / ".venv-scan" / "Scripts" / "python.exe"
     if python.is_file() and (ROOT / "fusion.py").is_file():
         return [str(python), str(ROOT / "fusion.py")]
+    if bundled.is_file():
+        return [str(bundled)]
     raise RuntimeError("Falta Fusion: usa el ZIP completo o ejecuta setup-scan.ps1")
 
 

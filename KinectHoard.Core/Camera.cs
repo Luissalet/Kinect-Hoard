@@ -31,6 +31,8 @@ namespace KinectHoard.Core
         // Unmodified millimetres (depth) or 16-bit sensor intensity (infrared).
         public ushort[] Values { get; set; }
         public TrackedBody[] Bodies { get; set; }
+        // Optional synchronized SDK person labels: 0-5 body slot, 255 background.
+        public byte[] BodyIndices { get; set; }
         // Optional original high-resolution RGB and depth-pixel-to-color mapping.
         // Populated only for quality recording, to avoid copying it for live previews.
         public int FullColorWidth { get; set; }
@@ -44,6 +46,7 @@ namespace KinectHoard.Core
     public sealed class TrackedBody
     {
         public ulong TrackingId { get; set; }
+        public int BodyIndex { get; set; }
         public BodyJoint[] Joints { get; set; }
     }
 
