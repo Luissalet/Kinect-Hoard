@@ -21,6 +21,9 @@ Faustus admite un manifiesto `faustus-plugin.json` junto a la aplicación. Este 
 | `get_capability(capability_id)` | Datos, muestras del Toolkit, rutas de código y documentación |
 | `read_hoard_source(relative_path)` | Código del catálogo y todos los Markdown de `docs/`; rechaza rutas ajenas al proyecto |
 | `sensor_status()` | Detección USB y backend sin iniciar un flujo |
+| `start_live_scan(mode, generation, subject)` | Abre vista previa del escáner: cámara móvil/fija y persona/objeto |
+| `live_scan_status()` | Modo, seguimiento y estado real de exportación del escáner en directo |
+| `control_live_scan(action, x, y)` | Iniciar, pausar, finalizar, cerrar, seleccionar sujeto y girar/restaurar la vista |
 | `capture_artifact(kind, generation)` | Crea PNG, PGM, JSON o PLY bajo `captures/` y devuelve la ruta; `generation` puede ser `one` o `360` |
 | `record_session(stream, seconds, generation)` | Graba una sesión `.khr` local; el backend nativo 360 admite Color, Depth, Infrared y ColorDepth |
 | `record_audio(seconds)` | Intenta grabar WAV de One; devuelve error si el runtime no produce muestras |

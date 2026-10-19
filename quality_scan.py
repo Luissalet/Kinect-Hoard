@@ -475,7 +475,68 @@ def scan(sessions: list[Path], output: Path, report_path: Path, tracking: str = 
     return report
 
 
+def texture_live(directory: Path) -> dict:
+    """Bake original RGB onto the native live mesh using its accepted poses.
+
+    No new odometry pass: replacing the live trajectory would misalign the
+    mesh and its images, particularly when the subject moves before a fixed camera.
+    """
+    import numpy as np
+    import open3d as o3d
+
+    directory = directory.resolve()
+    manifest = json.loads((directory / "live.scan.json").read_text(encoding="utf-8"))
+    if manifest.get("format") != "KINECT_HOARD_LIVE_SCAN_1":
+        raise ValueError("Sesión de escáner en directo incompatible")
+    session = directory / "session.khr"
+    trajectory = manifest["poses"]
+    group, intrinsic, _ = _load_session(
+        session, manifest["model"], "fixed", len(trajectory) + 1, 3.5, 0, None, np, o3d,
+    )
+    if len(group) != len(trajectory):
+        raise ValueError("La trayectoria no corresponde a los fotogramas archivados")
+    for frame, entry in zip(group, trajectory):
+        if frame.timestamp != entry["timestamp_ticks_utc"]:
+            raise ValueError("Marca temporal de textura distinta de su pose")
+        pose = np.asarray(entry["camera_to_world"], dtype=np.float64)
+        if pose.shape != (4, 4) or not np.isfinite(pose).all() or not np.allclose(pose[3], [0, 0, 0, 1]):
+            raise ValueError("Pose de textura inválida")
+        frame.pose = pose
+        if "foreground_runs" in entry:
+            selected = np.zeros(frame.depth.size, dtype=bool)
+            runs = entry["foreground_runs"]
+            if len(runs) % 2:
+                raise ValueError("Máscara de escaneo truncada")
+            for start, count in zip(runs[::2], runs[1::2]):
+                if not isinstance(start, int) or not isinstance(count, int) or start < 0 or count < 1 or start + count > selected.size:
+                    raise ValueError("Máscara de escaneo fuera de sus dimensiones")
+                selected[start:start + count] = True
+            frame.depth[~selected.reshape(frame.depth.shape)] = 0
+    mesh = o3d.io.read_triangle_mesh(str(directory / "scan.ply"))
+    if not mesh.has_triangles():
+        raise ValueError("El volumen no contiene una superficie exportable")
+    # Fusion emits separate copies of shared vertices for each triangle.
+    # Weld exact duplicates before UV unwrapping: otherwise xatlas sees a
+    # disconnected triangle soup, creating seams and extremely slow packing.
+    mesh.remove_duplicated_vertices()
+    mesh.remove_degenerate_triangles()
+    mesh.remove_duplicated_triangles()
+    mesh.remove_unreferenced_vertices()
+    if len(mesh.triangles) > 200_000:
+        mesh = mesh.simplify_quadric_decimation(200_000)
+    mesh.compute_vertex_normals()
+    texture = _bake_texture(mesh, [group], [intrinsic], directory / "scan.obj", 2048, 32, np, o3d)
+    result = {**manifest, **texture, "vertices": len(mesh.vertices), "triangles": len(mesh.triangles),
+              "texture_pose_source": "native live Fusion accepted poses"}
+    (directory / "scan.scan.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+    return result
+
+
 def main() -> None:
+    if len(sys.argv) == 3 and sys.argv[1] == "--texture-live":
+        result = texture_live(Path(sys.argv[2]))
+        print(f"OBJ texturizado: {result['obj']}")
+        return
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("session", type=Path, help="Sesión ColorDepth .khr")
     parser.add_argument("output", type=Path, help="Base de salida .obj o .ply")

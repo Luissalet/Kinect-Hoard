@@ -20,6 +20,7 @@ async def main() -> None:
     async with Client(mcp) as client:
         tools = await client.list_tools()
         names = {tool.name for tool in tools.tools}
+        assert {"start_live_scan", "live_scan_status", "control_live_scan"} <= names
         assert {"list_capabilities", "get_capability", "read_hoard_source", "sensor_status", "capture_artifact", "record_session", "record_audio", "recognize_speech", "analyze_face", "capture_face3d", "scan_head", "capture_gestures", "analyze_gesture_session", "scan_3d", "fuse_session", "session_info"} <= names
         listing = await client.call_tool("list_capabilities", {"generation": "one"})
         assert not listing.is_error
