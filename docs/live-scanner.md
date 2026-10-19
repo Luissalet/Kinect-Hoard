@@ -1,10 +1,10 @@
 # Escáner en directo
 
-La entrada principal está en **Hoard Hub → Kinect Hoard**, con One fija y Persona
+El escáner se abre desde **Hoard Hub → Kinect Hoard → Escáner 3D**, con One fija y Persona
 seleccionados. La web usa el tema común de HoardLink y su lanzador oficial de
 Faustus. `setup-mcp.ps1` instala la biblioteca común sin enlaces al repo de origen.
-La interfaz escucha en `127.0.0.1:64321`; **Conectar cámara** abre el motor en
-`127.0.0.1:64320`. Abrir el Hub, el catálogo o MCP no inicia cámaras.
+La interfaz escucha en `127.0.0.1:64321`; **Conectar cámara** abre el motor en un puerto libre (64320 o 64322–64325),
+publicado en `data/scanner-endpoint.json`. Abrir el Hub, el catálogo o MCP no inicia cámaras.
 
 La web permite conectar, ver la máscara, iniciar, pausar, finalizar, girar la
 superficie y descargar OBJ/MTL/PNG/PLY. Desconecta antes de cambiar los ajustes.

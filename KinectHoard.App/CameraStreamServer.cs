@@ -19,13 +19,16 @@ namespace KinectHoard.App
         private readonly bool quality;
         private readonly FusionScanner scanner;
         private volatile bool stopRequested;
+        private volatile bool usbPresent;
         private byte[] image;
         private byte[] raw;
         private byte[] rgbd;
         private string frameJson;
+        private byte[] avatar;
         private string lastError;
         private DateTime lastFrameUtc;
         private long frameNumber;
+        private int bodyCount;
 
         private CameraStreamServer(StreamKind stream, string model, bool quality, FusionScanner scanner) { this.stream = stream; this.model = model; this.quality = quality; this.scanner = scanner; }
 
@@ -75,6 +78,7 @@ namespace KinectHoard.App
                     {
                         var usb = UsbDiscovery.GetStatus(model);
                         usable = usb.Usable;
+                        usbPresent = usb.Detected;
                         if (!usable) SetError(usb.Description);
                         nextProbe = DateTime.UtcNow.AddSeconds(1);
                     }
@@ -125,6 +129,10 @@ namespace KinectHoard.App
 
         private void Publish(CameraFrame frame, DepthIntrinsics intrinsics)
         {
+            byte[] avatarPng = null;
+            if (frame.Bodies != null)
+                using (var bitmap = AvatarRenderer.Create(frame.Bodies, frame.Width, frame.Height))
+                using (var output = new MemoryStream()) { bitmap.Save(output, ImageFormat.Png); avatarPng = output.ToArray(); }
             byte[] png;
             using (var bitmap = FrameImage.Create(frame))
             using (var output = new MemoryStream())
@@ -194,6 +202,8 @@ namespace KinectHoard.App
             lock (gate)
             {
                 image = png;
+                avatar = avatarPng;
+                bodyCount = frame.Bodies == null ? 0 : frame.Bodies.Length;
                 raw = values;
                 rgbd = snapshot;
                 frameJson = metadata;
@@ -242,11 +252,12 @@ namespace KinectHoard.App
                 if (path == "/") { Send(context, 200, "text/html; charset=utf-8", Encoding.UTF8.GetBytes(Page)); return; }
                 if (path == "/api/health")
                 {
-                    string error; DateTime last; long sequence;
-                    lock (gate) { error = lastError; last = lastFrameUtc; sequence = frameNumber; }
+                    string error; DateTime last; long sequence; int tracked;
+                    lock (gate) { error = lastError; last = lastFrameUtc; sequence = frameNumber; tracked = bodyCount; }
                     string json = new JavaScriptSerializer().Serialize(new Dictionary<string, object> {
-                        { "sensor", model }, { "usb_present", UsbDiscovery.IsPresent(model) },
+                        { "service", "kinect-hoard-camera" }, { "sensor", model }, { "usb_present", usbPresent },
                         { "stream", stream.ToString() }, { "frames", sequence },
+                        { "body_tracking", model == "one" && (stream == StreamKind.Skeleton || stream == StreamKind.ColorDepth) }, { "bodies_count", tracked },
                         { "streaming", last != DateTime.MinValue && (DateTime.UtcNow - last).TotalSeconds < 3 },
                         { "last_frame_utc", last == DateTime.MinValue ? null : last.ToString("O") }, { "error", error }
                     });
@@ -255,8 +266,8 @@ namespace KinectHoard.App
                 byte[] content; string type;
                 lock (gate)
                 {
-                    content = path == "/frame.png" ? image : path == "/frame.raw" ? raw : path == "/api/rgbd" ? rgbd : path == "/api/frame" && frameJson != null ? Encoding.UTF8.GetBytes(frameJson) : null;
-                    type = path == "/frame.png" ? "image/png" : path == "/frame.raw" || path == "/api/rgbd" ? "application/octet-stream" : "application/json; charset=utf-8";
+                    content = path == "/frame.png" ? image : path == "/avatar.png" ? avatar : path == "/frame.raw" ? raw : path == "/api/rgbd" ? rgbd : path == "/api/frame" && frameJson != null ? Encoding.UTF8.GetBytes(frameJson) : null;
+                    type = path == "/frame.png" || path == "/avatar.png" ? "image/png" : path == "/frame.raw" || path == "/api/rgbd" ? "application/octet-stream" : "application/json; charset=utf-8";
                 }
                 if (content == null) { Send(context, path == "/frame.png" || path == "/frame.raw" || path == "/api/frame" || path == "/api/rgbd" ? 503 : 404, "text/plain; charset=utf-8", Encoding.UTF8.GetBytes("No frame")); return; }
                 context.Response.Headers["Cache-Control"] = "no-store";

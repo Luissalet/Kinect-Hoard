@@ -11,7 +11,16 @@ Con Python 3.11 o superior y la aplicación compilada o extraída del ZIP:
 & '.\.venv\Scripts\python.exe' '.\tests\smoke_mcp.py'  # solo en el repositorio fuente
 ```
 
-Faustus admite un manifiesto `faustus-plugin.json` junto a la aplicación. Este repositorio lo incluye con `id` `kinect-hoard`, un comando para la UI y el servidor MCP. En la carpeta instalada, ejecuta `setup-mcp.ps1` antes de conectar el plugin y configura `KINECT_HOARD_DIR` como esa carpeta. Como Hoard es una aplicación WinForms y no ofrece `/api/health`, Faustus necesita que el usuario configure el perfil de lanzamiento; no debe adivinar un proceso o puerto.
+Faustus admite el manifiesto raíz `faustus-plugin.json`, id `kinect-hoard`.
+`setup-mcp.ps1` prepara el servidor web en 64321, su `/api/health` y el comando
+MCP stdio. El Hub lo abre bajo demanda; consultar herramientas no abre cámaras.
+La UI presenta diez modos, fuentes y contratos. Las 33 herramientas se publican
+también por el contrato compartido `/api/agent/tools` y `/api/agent/call`.
+
+Los [modos y puentes](workspace.md) añaden `list_modes`, `start_camera`,
+`camera_status`, `get_live_frame`, `close_camera`, `list_artifacts`, `open_demo`,
+`replay_session` y `connect_blender`. Blender usa articulaciones de `get_live_frame`
+en su armature y puede insertar keyframes. La salida limpia está en `/camera-output`.
 
 ## Herramientas disponibles
 

@@ -60,8 +60,10 @@ namespace KinectHoard.App
         private bool closing;
         private bool settingsDirty;
 
-        internal LiveScannerForm(string initialMode = "fixed", string initialModel = "one", string initialTarget = "person")
+        private readonly int port;
+        internal LiveScannerForm(string initialMode = "fixed", string initialModel = "one", string initialTarget = "person", int port = 64320)
         {
+            this.port = port;
             Text = "Kinect Hoard · escáner en directo";
             ClientSize = new Size(1350, 780); MinimumSize = new Size(990, 600);
             BackColor = Color.FromArgb(22, 25, 31); ForeColor = Color.WhiteSmoke; Font = new Font("Segoe UI", 10);
@@ -142,7 +144,7 @@ namespace KinectHoard.App
                 settingsDirty = false;
                 var session = scanner;
                 server = Task.Run(() => {
-                    try { int result = CameraStreamServer.Run(64320, KinectHoard.Core.StreamKind.ColorDepth, 0, session.Model, true, session); if (result != 0) session.SetError("El puerto 64320 está ocupado. Cierra el escáner anterior."); }
+                    try { int result = CameraStreamServer.Run(port, KinectHoard.Core.StreamKind.ColorDepth, 0, session.Model, true, session); if (result != 0) session.SetError("El puerto " + port + " está ocupado. Reconecta la cámara."); }
                     catch (Exception ex) { session.SetError(ex.GetBaseException().Message); }
                 });
             }
@@ -152,7 +154,7 @@ namespace KinectHoard.App
         private async Task Stop()
         {
             if (server == null) return;
-            try { using (var client = new WebClient()) await client.UploadStringTaskAsync("http://127.0.0.1:64320/api/stop", "POST", ""); } catch (WebException) { }
+            try { using (var client = new WebClient()) await client.UploadStringTaskAsync("http://127.0.0.1:" + port + "/api/stop", "POST", ""); } catch (WebException) { }
             await server; server = null;
         }
 

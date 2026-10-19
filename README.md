@@ -6,10 +6,15 @@ Estudio local para explorar, depurar y reutilizar capacidades Kinect. Detecta Ki
 
 Desde **Hoard Hub**, abre **Kinect Hoard**. Su interfaz usa el tema compartido de
 la familia, el acceso común a Faustus y el mismo catálogo de herramientas que MCP.
-Arranca bajo demanda: abrir la interfaz no enciende el sensor. **Conectar cámara**
-abre la vista previa y **Iniciar escaneo** comienza a integrar.
+Arranca bajo demanda: abrir la interfaz no enciende el sensor. La portada ofrece
+los diez [modos del estudio](docs/workspace.md), con las 26 capacidades y sus
+referencias: cámara; cuerpo, esqueleto y avatar; escáner; rostro; audio y voz;
+gestos e interacción; geometría; grabación y reproducción; integraciones; sensores.
+Cada modo tiene acciones reales y su código. Blender recibe un armature en directo
+y puede grabar keyframes. La salida limpia sirve como fuente Navegador para OBS.
+**Conectar cámara** abre la vista previa y **Iniciar escaneo** comienza a integrar.
 
-El flujo inicial es **One · Cámara fija · Persona**. La máscara corporal separa
+Dentro del escáner, el flujo inicial es **One · Cámara fija · Persona**. La máscara corporal separa
 el fondo; la superficie con color crece en directo y **Finalizar y texturizar**
 exporta OBJ, MTL y PNG. El seguimiento es experimental: el giro natural completo
 de una persona **todavía no está validado** y no hay corrección no rígida de

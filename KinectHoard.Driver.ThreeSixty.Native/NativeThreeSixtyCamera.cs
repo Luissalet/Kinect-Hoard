@@ -26,8 +26,8 @@ namespace KinectHoard.Driver.ThreeSixty.Native
             get
             {
                 var status = UsbDiscovery.GetStatus("360");
-                bool compatible = status.Service.Equals("libusbK", StringComparison.OrdinalIgnoreCase) ||
-                    status.Service.Equals("WinUSB", StringComparison.OrdinalIgnoreCase);
+                bool compatible = string.Equals(status.Service, "libusbK", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(status.Service, "WinUSB", StringComparison.OrdinalIgnoreCase);
                 Detail = status.Description + (status.Usable && !compatible ?
                     "; cámara requiere libusbK (servicio actual: " + status.Service + ")" : "");
                 return status.Usable && compatible;

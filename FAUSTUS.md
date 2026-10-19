@@ -7,6 +7,20 @@ MCP stdio ofrece las mismas herramientas que `/api/agent/tools` y el contrato
 autenticado `/api/agent/call`. Conectar MCP o consultar catálogo no abre ventanas.
 La interfaz utiliza el tema y el copilot oficial de HoardLink, sin LLM propio.
 
+La portada es el menú de diez modos y 26 capacidades, con logo y referencias.
+`list_modes` devuelve recetas, acciones, fuentes y muestras. Nueve herramientas
+nuevas (33 en total) publican lector compartido, datos de articulaciones, archivos,
+demos, reproducción y Blender. `connect_blender` abre articulaciones One con RGBD o Skeleton y un armature
+animable en Blender; la vista limpia es una fuente Navegador para OBS. Guía:
+`docs/workspace.md`. La validación física confirmó los ocho flujos One, KHR y PLY
+color; audio produce 3,008 s para una solicitud de 3 s. La prueba Blender crea
+huesos y keyframes; sin persona delante el SDK informa cero cuerpos.
+
+El fallo «código 1» se reprodujo: 64320 estaba ocupado por un socket saliente
+Bound/CloseWait. Los lectores eligen un puerto disponible y comparten el endpoint
+entre web y MCP; no se mata el proceso ajeno. Los errores del worker quedan en
+`data/*-worker.log`. Estado HTTP y captura de audio no consultan WMI por bloque.
+
 Escáner: inicio One fija/Persona, RGB con máscara corporal SDK, seguimiento
 rígido RGBD + Fusion nativo, superficie con color, pausa, finalización y exportación
 OBJ/MTL/PNG/PLY. La 360 móvil y las herramientas de estudio se conservan.
