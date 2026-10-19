@@ -7,7 +7,7 @@
   "placeholders": ["KINECT_HOARD_DIR"],
   "defaults": {"DATA_DIR": "{KINECT_HOARD_DIR}/captures", "TOKEN_FILE": "{KINECT_HOARD_DIR}/data/mcp-token"},
   "app": {
-    "ui_url": null,
+    "ui_url": "{APP_URL}",
     "url_default": "http://127.0.0.1:64321",
     "health": {"path": "/api/health", "expect": {"service": "kinect-hoard"}},
     "launch_hint": {
