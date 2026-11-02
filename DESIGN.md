@@ -89,7 +89,9 @@ components:
 Kinect Hoard extends the pinned Hoard family world: charcoal working surfaces,
 mint Kinect accents, serif identity and readable sans controls. It is an Operate
 surface with a permanent mode menu, practical controls and implementation
-references. The sensor-shaped `app-icon.svg` identifies the workspace and scanner.
+references. The mint dragon surrounding a gold sensor and tracked person identifies
+the workspace and scanner. `app-icon.svg` embeds the same PNG used by the Hub;
+`app-icon.ico` provides the native application sizes.
 
 The web system is recorded from `ui/workspace.html`, `ui/workspace.css`,
 `ui/workspace.js`, the preserved `ui/scanner.html` and the shared HoardLink theme.

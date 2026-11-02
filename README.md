@@ -103,3 +103,7 @@ Una demo se marcará como compatible con una generación solo después de probar
 ## Compilar
 
 Requiere Windows, .NET Framework 4.8 y el SDK .NET 9 instalado para `dotnet build`. Este equipo ya tiene las referencias 1.8 y 2.0 necesarias. Ejecuta `build.ps1`; los módulos quedan junto a `KinectHoard.App.exe` en `KinectHoard.App\bin\Release\net48`.
+
+## Icono de la familia (2026-11-02)
+
+Dragon turquesa con sensor y figura corporal dorados. Cabecera, escaner y favicon usan app-icon.svg (PNG incrustado); el Hub usa app-icon.png y el ejecutable usa app-icon.ico con seis resoluciones. Arte final con ala corregida, sin cambios de funciones ni inicio de sensores.
