@@ -826,6 +826,7 @@ namespace KinectHoard.App
         internal MainForm(string initialMode = null, string replayPath = null)
         {
             Text = "Kinect Hoard";
+            Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
             ClientSize = new Size(1120, 790);
             MinimumSize = new Size(760, 570);
             BackColor = Color.FromArgb(22, 25, 31);

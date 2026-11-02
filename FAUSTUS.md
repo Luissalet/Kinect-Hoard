@@ -36,3 +36,7 @@ como resueltas. Investigación y límites: `docs/scanner-research.md`.
 Las tomas están en `captures/live-*`: sesión RGBD, intrínsecos, poses/máscara,
 malla y textura si finalizó la exportación. No borrar capturas al corregir el motor.
 Las imágenes permanecen locales; la UI no envía píxeles al copilot automáticamente.
+
+## Icono de la familia (2026-11-02)
+
+Dragon turquesa con sensor y figura corporal dorados. Cabecera, escaner y favicon usan app-icon.svg (PNG incrustado); el Hub usa app-icon.png y el ejecutable usa app-icon.ico con seis resoluciones. Arte final con ala corregida, sin cambios de funciones ni inicio de sensores.
