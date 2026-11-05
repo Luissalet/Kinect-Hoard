@@ -14,9 +14,24 @@
   volumen; **Reproducir como en directo** (UI, REST, MCP `replay_live_capture`)
   lo mide sin cámara. Persona sintética al ritmo real: 0,56° RMS (SIFT 35,5°);
   toma real 19-10: pares de control 3,1° de mediana (antes 11,3°).
-- Bajar el p95 por fotograma (55 ms en este equipo) por debajo de 33 ms: el pico
-  está en rehacer el volumen tras un cierre; hacerlo en un segundo volumen en
-  segundo plano y cambiarlo al terminar.
+- Hecho el 05-11-2026 (revisión): el volumen corregido tras un cierre se rehace
+  en un segundo volumen, unas vistas clave por fotograma, y se intercambia (pico
+  por fotograma 9–36 ms, antes 150–450 ms); la reproducción descomprime por
+  adelantado y a 30 fps reales ya no pierde dos fotogramas de cada tres. Persona
+  sintética a 30 fps: 91 % de los fotogramas en 33 ms, p95 44 ms, p99 52 ms.
+- Bajar el p95 restante (44 ms a 30 fps en este equipo): lo que queda por encima
+  es el raycast de la vista de superficie (17–25 ms, en buena parte espera a la
+  GPU compartida), aplazado a fotogramas con hueco con un máximo de 300 ms.
+  Candidatos: raycast propio sobre las vistas clave fuera del hilo de captura, o
+  volumen de vista de menor resolución.
+- Más de 160 vistas clave (unas 2,7 vueltas a 6°) dejan de añadirse y de cerrar
+  vueltas: para tomas largas, sustituir las más antiguas de cada sector de giro.
+- Sin máscaras archivadas (persona sintética pasada como *objeto*), la máscara en
+  directo (`SubjectGate`) separa sola al sujeto de pared, suelo y caja (0,58° RMS,
+  82 % de completitud), pero `turn_refine.segment` solo encuentra al sujeto en 40
+  de 269 vistas y el residuo de malla de `replay_score` sale a 1,2 m. Las tomas
+  reales siempre archivan máscara; igualar la segmentación del refinado a la del
+  directo antes de refinar tomas sin ella.
 - Acercar la toma real al refinado (3,1° frente a 1,1° en pares de control):
   registrar también contra el volumen raycast y no solo contra vistas clave.
 - Compensar cambios de postura mayores que el umbral de 1,5 cm con un campo de

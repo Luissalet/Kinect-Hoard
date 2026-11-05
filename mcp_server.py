@@ -355,8 +355,12 @@ def replay_score(replay: str = "") -> dict[str, Any]:
     """Measurements of a live replay (newest when empty).
 
     Tracking counts (tracked, relocalised, lost, loop closures, volume
-    rebuilds), per-frame latency against the 30 fps budget, rotation error
-    against ground truth (synthetic takes), pose error and overlap on the
+    rebuilds), per-frame latency against the 30 fps budget (only frames that
+    reached tracking; frames without the subject are counted as idle_frames;
+    p95/p99 and the per-frame rebuild and surface-render cost), frames dropped
+    and delivery delay of the replay, rotation error against ground truth
+    (synthetic takes) for the final poses and for the poses each view was
+    fused with (trajectory_live), pose error and overlap on the
     offline refine's held-out control pairs next to the recorded live and the
     refined poses (recorded takes), and the live mesh's depth residual.
     """

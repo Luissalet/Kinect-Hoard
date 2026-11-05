@@ -94,7 +94,13 @@ incremental y dentro del presupuesto de cada fotograma (`ColorIcpTracker.cs`,
    giro se registra la vista clave contra la antigua; un grafo de poses (Gauss-Newton,
    poda de aristas incoherentes) se resuelve en segundo plano y, si mueve las
    poses, el volumen se rehace con las vistas clave corregidas: la superficie en
-   pantalla no se duplica al volver al frente.
+   pantalla no se duplica al volver al frente. El volumen corregido se construye
+   en un segundo volumen, unas vistas clave por fotograma (al menos una; más
+   mientras el fotograma no pase de 26 ms, `KINECT_HOARD_REBUILD_BUDGET_MS`), con
+   las vistas nuevas fusionadas también en él; al terminar se intercambian. Un
+   grafo que llega a mitad deja otra reconstrucción en cola en vez de reiniciar
+   la que está en curso. Antes se rehacía de golpe en el hilo de captura: 150–450 ms
+   de un solo fotograma tras cada cierre. Ahora el pico por fotograma es de 9–36 ms.
 
 Se probó además descartar al integrar los píxeles a más de 1,5 cm del volumen
 (la segunda pasada del refinado): con la persona sintética abría huecos (malla en
@@ -102,9 +108,25 @@ Se probó además descartar al integrar los píxeles a más de 1,5 cm del volume
 4–9 ms por fotograma, así que no se usa en directo.
 
 `live.scan.json` guarda además `trajectory` (todas las vistas seguidas, con poses
-corregidas por el grafo), `tracking` (seguidas, recolocadas, perdidas, cierres,
-reconstrucciones del volumen…) y `latency` (milisegundos por fotograma frente a los
-33 ms de 30 fps). El seguimiento anterior por rasgos SIFT sigue disponible como
+corregidas por el grafo), `trajectory_live` (la pose con la que se fusionó cada
+vista, antes de que un cierre posterior la moviera: lo que se vio en pantalla),
+`tracking` (seguidas, recolocadas, perdidas, cierres, reconstrucciones del
+volumen, reconstrucción en curso, raycasts aplazados…) y `latency`
+(milisegundos por fotograma frente a los 33 ms de 30 fps: mediana, p95, p99,
+máximo, fotogramas de más de 50 ms y coste por fotograma de máscara, fusión,
+vista y reconstrucción). Solo se miden los fotogramas que llegan al seguimiento;
+los que no tienen sujeto cuentan aparte como `idle_frames`. Antes entraban en la
+medida con ~0 ms y daban a la toma del 19-10 un 80 % «dentro de 33 ms»; medidos
+solo los 109 fotogramas con sujeto es el 16 % (grabada a 2,5 Hz, cada fotograma
+recoloca más y pinta la vista). `KINECT_HOARD_FRAME_LOG=archivo`
+escribe los componentes de cada fotograma.
+
+La vista de superficie (raycast de Fusion) también corre en el hilo de captura y
+cuesta 17–25 ms en este equipo, en buena parte espera a la GPU compartida: se
+calcula a 1/1,5 de la resolución de profundidad (`KINECT_HOARD_SURFACE_SCALE`) y
+solo en un fotograma con hueco en los 33 ms, con un máximo de 300 ms sin
+actualizarla. Es lo que queda por encima del presupuesto (un fotograma de cada
+~10 a 30 fps). El seguimiento anterior por rasgos SIFT sigue disponible como
 `tracker: sift` para comparar.
 
 ## Reproducir como en directo
@@ -113,7 +135,12 @@ Sin sensor, **Reproducir como en directo** (debajo de *Refinar una toma*) lleva
 una toma guardada (`captures/live-*` o la persona sintética `synthetic-*`) por el
 mismo `FusionScanner.Process` que la cámara, al ritmo de sus marcas de tiempo:
 si el proceso se retrasa, se descartan los fotogramas que el sensor habría
-sustituido. Se ve igual que una toma real (cámara con máscara y superficie que
+sustituido. Los fotogramas se descomprimen por adelantado en otro hilo, como los
+entrega el sensor, y la espera usa el temporizador de 1 ms de Windows: con la
+descompresión en el mismo hilo, la persona sintética a 30 fps perdía 534 de 806
+fotogramas aunque el seguimiento cabía en el presupuesto, y su error subía de
+0,8° a 1,9° RMS. `replay` informa de entregados, descartados y del retraso de
+entrega (mediana, p95, máximo). Se ve igual que una toma real (cámara con máscara y superficie que
 crece, que puedes girar) y al terminar mide la reproducción y exporta malla y
 atlas en `captures/replay-*`. Elige seguimiento (ICP con color o rasgos SIFT) y
 ritmo (tiempo de la toma, mitad, doble o sin pausa).
@@ -144,10 +171,38 @@ En la toma real lo grabado en directo con el seguidor anterior daba 11,3° / 23,
 de error en los pares de control, 36 % de solape y una malla a 820 mm de su
 profundidad (integraba las 187 vistas sin sujeto). La persona sintética se
 reprodujo a 10 fps reales; en este equipo, compartido con otras cargas, el 64 %
-de los fotogramas entró en 33 ms y el p95 los supera (picos al rehacer el volumen
-tras un cierre). La toma real del 19-10 se grabó a 2,5 Hz y la silla, a 640×480,
+de los fotogramas entró en 33 ms y el p95 los superaba (antes de la revisión de
+abajo; el pico de 150–450 ms al rehacer el volumen ya no existe). La toma real del 19-10 se grabó a 2,5 Hz y la silla, a 640×480,
 gasta 18 ms en el raycast de la vista. Prueba automática: `tests/live-replay.py`
 (persona sintética: RMS < 5°, final < 4°, al menos un cierre, residuo < 6 mm).
+
+### Revisión del 05-11-2026: 30 fps reales y presupuesto por fotograma
+
+La persona sintética anterior está grabada a 10 fps; la One entrega 30. Una
+persona sintética a 30 fps (806 fotogramas, 1,12 vueltas en 27 s, semilla 11)
+reproducida a su ritmo, antes y después de esta revisión:
+
+| Medida | Antes | Ahora |
+| --- | --- | --- |
+| Fotogramas descartados por retraso | 534 de 806 | 23 de 806 |
+| Rotación RMS / máx. (poses finales) | 1,93° / 5,2° | 0,83° / 2,8° |
+| Rotación RMS con la pose de cada vista al fusionarla | — | 0,92° |
+| Superficie: mediana a la verdad / completitud a 1 cm | 10,8 mm / 48 % | 1,1 mm / 82 % |
+| Proceso por fotograma: mediana / p95 / p99 | 27 / 65 / — ms | 17,6 / 44 / 52 ms |
+| Fotogramas en 33 ms | 58 % | 91 % |
+| Fotogramas de más de 50 ms | — | 16 de 783 (raycast de la vista) |
+| Pico de reconstrucción del volumen en un fotograma | 392–447 ms | 9–36 ms |
+
+Con la persona sintética a 10 fps: 0,66° RMS, 82 % de completitud, pico de
+reconstrucción 9 ms. La misma persona como *objeto*, sin máscaras archivadas
+(la máscara en directo separa sola pared, suelo y caja): 0,58° RMS y 82 %. Toma
+real 19-10 (2,5 Hz): pares de control 3,08° de mediana, 77 % de solape, residuo
+4,5 mm, como antes; sus 109 fotogramas con sujeto tardan 44 ms de mediana
+(recolocan más y pintan la vista en cada uno) y los 187 sin sujeto ya no cuentan
+en la medida. Pruebas: `tests/replay-pacing.py` (30 fps al ritmo de la toma:
+≤ 25 % descartados, retraso mediano < 12 ms; fotogramas sin sujeto como
+`idle_frames` fuera de la medida) y `tests/live-replay.py` (pico de
+reconstrucción < 80 ms, reconstrucción terminada, `trajectory_live`).
 
 ## Refinado sin cámara
 

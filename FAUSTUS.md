@@ -60,7 +60,13 @@ al ritmo de sus marcas de tiempo (descarta fotogramas si se retrasa); botón
 `replay_score`; `replay_score.py` mide `captures/replay-*`. Persona sintética:
 0,56° RMS / 2,2° máx. / 0,55° final (SIFT 35,5° / 67,7° / 8,5°), superficie a
 1,65 mm y 82 % de completitud, residuo 2,1 mm, seguimiento 11 ms y proceso 20 ms
-por fotograma (mediana; p95 55 ms en este equipo). Toma real 19-10: 108 de 109
+por fotograma (mediana) a 10 fps. Revisión 05-11: el volumen corregido tras un
+cierre se rehace en un segundo volumen unas vistas clave por fotograma (pico
+9–36 ms, antes 150–450 ms); la reproducción descomprime en otro hilo con
+temporizador de 1 ms (a 30 fps descartaba 534 de 806 fotogramas, ahora 23); la
+latencia solo mide fotogramas con sujeto (`idle_frames` aparte) y añade p99,
+componentes y `trajectory_live`. Persona sintética a 30 fps: 0,83° RMS, 82 % de
+completitud, 91 % de fotogramas en 33 ms, p95 44 ms (raycast de la vista). Toma real 19-10: 108 de 109
 vistas seguidas, pares de control 3,1° de mediana (grabado en directo 11,3°,
 refinado 1,1°), solape 77 %, residuo 4,4 mm (grabado 820 mm). Prueba
 `tests/live-replay.py`.

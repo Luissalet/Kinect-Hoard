@@ -41,7 +41,17 @@ namespace KinectHoard.App
         private readonly List<TrackedPose> poses = new List<TrackedPose>();
         private readonly List<TrackedPose> trajectory = new List<TrackedPose>();
         private readonly Task archiveTask;
-        private ColorReconstruction volume;
+        private ColorReconstruction volume, spare;
+        // Incremental rebuild after a graph solve: the corrected keyframes go
+        // into the spare volume a few per frame, then the two are swapped.
+        private List<Tuple<IcpFrame, double[]>> rebuildQueue;
+        private int rebuildNext, rebuildRestarts, rebuildFramesTotal, surfaceDeferred;
+        private bool rebuildPending;
+        private double keyframeMs = 4, surfaceMs = 12;
+        private DateTime lastSurface = DateTime.MinValue;
+        private int surfaceWidth, surfaceHeight;
+        // KINECT_HOARD_SURFACE_SCALE: depth resolution divided by this for the live surface view.
+        internal static readonly double SurfaceScale = Math.Max(1, ColorIcp.Tuning("KINECT_HOARD_SURFACE_SCALE", 1.5));
         private readonly RgbdFeatureTracker features = new RgbdFeatureTracker();
         private readonly LiveIcpTracker icp = new LiveIcpTracker();
         private readonly SubjectGate subject = new SubjectGate();
@@ -122,6 +132,8 @@ namespace KinectHoard.App
                 { "sift_proposals", icp.SiftProposals }, { "turn_sweeps", icp.Swept }, { "loop_closures", icp.LoopClosures }, { "loop_attempts", icp.LoopAttempts },
                 { "last_loop", icp.LastLoop }, { "graph_solves", icp.GraphSolves },
                 { "pruned_loops", icp.PrunedLoops }, { "volume_rebuilds", rebuilds },
+                { "rebuild_in_progress", rebuildQueue != null }, { "rebuild_restarts", rebuildRestarts }, { "rebuild_frames", rebuildFramesTotal },
+                { "surface_renders_deferred", surfaceDeferred },
                 { "last_correction_degrees", Math.Round(icp.LastCorrectionDegrees, 3) }, { "last_correction_mm", Math.Round(icp.LastCorrectionMetres * 1000, 2) },
                 { "fitness", Math.Round(icp.LastFitness, 3) }, { "rmse_mm", double.IsInfinity(icp.LastRmse) ? (double?)null : Math.Round(icp.LastRmse * 1000, 2) },
                 { "colour_agreement", Math.Round(icp.LastColour, 3) }, { "subject_absent_frames", subjectAbsent },
@@ -136,7 +148,7 @@ namespace KinectHoard.App
         {
             if (raw.Values == null || calibration == null) return;
             var watch = Stopwatch.StartNew();
-            double trackMs = 0, gateMs = 0, fusionMs = 0;
+            double trackMs = 0, gateMs = 0, fusionMs = 0, rebuildMs = 0;
             bool timed = false;
             var frame = CanonicalFrame(raw, inputMirrored);
             if (state == "connecting" || (state == "error" && !finished))
@@ -212,16 +224,25 @@ namespace KinectHoard.App
             }
             if (recording && !finished)
             {
-                timed = true;
                 if (absent && initialized)
-                { subjectAbsent++; state = "scanning"; detail = "Sujeto fuera de la vista: " + subject.LastReason + " Esta vista no se integra."; }
+                { subjectAbsent++; timing.AddIdle(); state = "scanning"; detail = "Sujeto fuera de la vista: " + subject.LastReason + " Esta vista no se integra."; }
                 else if (foreground < 1500)
-                    detail = Target == "person" && Model == "one" ? "Esperando una persona visible en profundidad." : "Selecciona el sujeto en la imagen y comprueba su profundidad.";
+                { timing.AddIdle(); detail = Target == "person" && Model == "one" ? "Esperando una persona visible en profundidad." : "Selecciona el sujeto en la imagen y comprueba su profundidad."; }
                 else
                 {
+                    timed = true;
                     double fusionStart = watch.Elapsed.TotalMilliseconds;
                     EnsureVolume(frame, masked);
-                    if (Tracker == "icp" && icp.TryApplyOptimisation()) Rebuild();
+                    double solveStart = watch.Elapsed.TotalMilliseconds;
+                    // The tracker takes every solve at once; a solve that lands during
+                    // a rebuild queues the next one instead of restarting it, which on
+                    // every loop closure would keep the corrected volume off screen.
+                    if (Tracker == "icp" && icp.TryApplyOptimisation())
+                    {
+                        if (rebuildQueue == null) BeginRebuild();
+                        else { rebuildPending = true; pose = Rigid.ToFusion(icp.CurrentPose); }
+                    }
+                    rebuildMs += watch.Elapsed.TotalMilliseconds - solveStart;
                     var pixels = new int[frame.Width * frame.Height];
                     Buffer.BlockCopy(frame.Bgra, 0, pixels, 0, frame.Bgra.Length);
                     for (int i = 0; i < pixels.Length; i++) if (masked[i] == 0) pixels[i] = 0;
@@ -254,8 +275,10 @@ namespace KinectHoard.App
                     }
                     if (accepted)
                     {
-                        volume.IntegrateFrame(depth, color, 120, 60, pose);
-                        fusionMs = watch.Elapsed.TotalMilliseconds - fusionStart - trackMs;
+                        // While the corrected volume is being rebuilt, new views go
+                        // into it; the one on screen stays as it was until the swap.
+                        (rebuildQueue != null ? spare : volume).IntegrateFrame(depth, color, 120, 60, pose);
+                        fusionMs = watch.Elapsed.TotalMilliseconds - fusionStart - trackMs - rebuildMs;
                         initialized = true; integrated++;
                         lock (trajectory) trajectory.Add(current);
                         state = "scanning";
@@ -286,14 +309,27 @@ namespace KinectHoard.App
                     }
                 }
             }
+            if (rebuildQueue != null && volume != null)
+            {
+                double rebuildStart = watch.Elapsed.TotalMilliseconds;
+                ContinueRebuild(watch);
+                rebuildMs += watch.Elapsed.TotalMilliseconds - rebuildStart;
+            }
             double renderStart = watch.Elapsed.TotalMilliseconds;
             Func<byte[]> pendingSurface = null;
+            // The surface raycast runs on this thread: the views wait for a
+            // frame with room left in the 30 fps budget, at most 300 ms.
+            if (render && timed && volume != null && initialized && renderStart + surfaceMs > FrameTiming.BudgetMs
+                && DateTime.UtcNow < lastSurface.AddMilliseconds(300))
+            { render = false; surfaceDeferred++; }
             if (render && volume != null && initialized)
             {
                 volume.CalculatePointCloud(points, rendered, orbit ? OrbitPose() : pose);
-                var pixels = new int[frame.Width * frame.Height];
+                surfaceMs = .8 * surfaceMs + .2 * (watch.Elapsed.TotalMilliseconds - renderStart);
+                lastSurface = DateTime.UtcNow;
+                var pixels = new int[surfaceWidth * surfaceHeight];
                 rendered.CopyPixelDataTo(pixels);
-                int width = frame.Width, height = frame.Height;
+                int width = surfaceWidth, height = surfaceHeight;
                 pendingSurface = () =>
                 {
                     var mirrored = MirrorX(pixels, width);
@@ -317,7 +353,7 @@ namespace KinectHoard.App
             fpsCount++;
             double seconds = (DateTime.UtcNow - fpsSince).TotalSeconds;
             if (seconds >= 1) { fps = fpsCount / seconds; fpsCount = 0; fpsSince = DateTime.UtcNow; }
-            if (timed) timing.Add(watch.Elapsed.TotalMilliseconds, trackMs, gateMs, fusionMs, renderMs);
+            if (timed) timing.Add(watch.Elapsed.TotalMilliseconds, trackMs, gateMs, fusionMs, renderMs, rebuildMs);
         }
 
         private static byte[] Png(int width, int height, byte[] bgra)
@@ -385,10 +421,51 @@ namespace KinectHoard.App
             return result ?? masked;
         }
 
-        // Re-fuses the stored keyframes with the poses of the latest graph
-        // solve, so a closed loop does not leave a doubled surface on screen.
+        // After a live graph solve: start re-fusing the corrected keyframes
+        // into the spare volume. Doing all of them at once on the capture
+        // thread cost 150-450 ms (one keyframe is ~4 ms of conversion and
+        // integration), so ContinueRebuild spreads them over the next frames
+        // and new views are fused into the spare meanwhile.
+        private void BeginRebuild()
+        {
+            pose = Rigid.ToFusion(icp.CurrentPose);
+            if (NoRebuild) return;
+            if (spare == null) spare = CreateVolume();
+            spare.ResetReconstruction(volumeCameraPose, volumeTransform);
+            if (rebuildQueue != null) rebuildRestarts++;
+            rebuildQueue = icp.Keyframes.Where(k => k.Depth != null).Select(k => Tuple.Create(k, k.Pose)).ToList();
+            rebuildNext = 0;
+        }
+
+        internal static readonly double RebuildBudgetMs = ColorIcp.Tuning("KINECT_HOARD_REBUILD_BUDGET_MS", 26);
+
+        // At least one keyframe per frame; more while the frame stays within
+        // the rebuild budget. Swaps the volumes when the queue is done.
+        private void ContinueRebuild(Stopwatch watch)
+        {
+            int width = intrinsics.Width, done = 0;
+            while (rebuildNext < rebuildQueue.Count && (done == 0 || watch.Elapsed.TotalMilliseconds + keyframeMs <= RebuildBudgetMs))
+            {
+                double start = watch.Elapsed.TotalMilliseconds;
+                var item = rebuildQueue[rebuildNext++];
+                spare.DepthToDepthFloatFrame(MirrorX(item.Item1.Depth, width), depth, .45f, 3.5f, false);
+                color.CopyPixelDataFrom(MirrorX(item.Item1.Color, width));
+                spare.IntegrateFrame(depth, color, 120, 60, Rigid.ToFusion(item.Item2));
+                keyframeMs = .7 * keyframeMs + .3 * (watch.Elapsed.TotalMilliseconds - start);
+                done++;
+            }
+            rebuildFramesTotal++;
+            if (rebuildNext < rebuildQueue.Count) return;
+            var shown = volume; volume = spare; spare = shown;
+            rebuildQueue = null; rebuilds++;
+            if (rebuildPending) { rebuildPending = false; rebuildRestarts++; BeginRebuild(); }
+        }
+
+        // Synchronous rebuild (finish and close): the incremental one, if any,
+        // is dropped and the shown volume is re-fused from every keyframe.
         private void Rebuild()
         {
+            rebuildQueue = null; rebuildPending = false;
             if (NoRebuild) { pose = Rigid.ToFusion(icp.CurrentPose); return; }
             pose = Rigid.ToFusion(icp.CurrentPose);
             // Same arguments as when the volume was created: Fusion places the
@@ -425,18 +502,32 @@ namespace KinectHoard.App
             // cx as well shifts the mesh by (W - 1 - 2 cx) / fx * z.
             var camera = new CameraParameters(intrinsics.Fx / frame.Width, intrinsics.Fy / frame.Height,
                 intrinsics.Cx / frame.Width, intrinsics.Cy / frame.Height);
-            volume = ColorReconstruction.FusionCreateReconstruction(new ReconstructionParameters(256, 384, 384, 384), processor, processor == ReconstructionProcessor.Amp ? 0 : -1, pose);
+            volumeCameraPose = pose;
+            volume = CreateVolume();
             var transform = volume.GetCurrentWorldToVolumeTransform();
             transform.M41 = 192 - center.X * 256; transform.M42 = 192 - center.Y * 256;
             transform.M43 = 192 - center.Z * 256;
             volume.ResetReconstruction(pose, transform);
-            volumeCameraPose = pose; volumeTransform = transform;
+            volumeTransform = transform;
+            // The rebuild target is allocated with the first volume, not at the
+            // first loop closure in the middle of the turn.
+            if (Tracker == "icp" && !NoRebuild) spare = CreateVolume();
             depth = new FusionFloatImageFrame(frame.Width, frame.Height, camera);
             smooth = new FusionFloatImageFrame(frame.Width, frame.Height, camera);
             color = new FusionColorImageFrame(frame.Width, frame.Height, camera);
-            rendered = new FusionColorImageFrame(frame.Width, frame.Height, camera);
-            points = new FusionPointCloudImageFrame(frame.Width, frame.Height, camera);
+            // The surface view is raycast on the capture thread; at the depth
+            // resolution it took 22-47 ms on a shared GPU (measured 05-11-2026),
+            // more than the 30 fps budget alone. Fewer rays, same camera.
+            surfaceWidth = Math.Max(64, (int)Math.Round(frame.Width / SurfaceScale));
+            surfaceHeight = Math.Max(48, (int)Math.Round(frame.Height / SurfaceScale));
+            rendered = new FusionColorImageFrame(surfaceWidth, surfaceHeight, camera);
+            points = new FusionPointCloudImageFrame(surfaceWidth, surfaceHeight, camera);
             finder = CameraPoseFinder.FusionCreateCameraPoseFinder(new CameraPoseFinderParameters(500, 200, 3.5f));
+        }
+
+        private ColorReconstruction CreateVolume()
+        {
+            return ColorReconstruction.FusionCreateReconstruction(new ReconstructionParameters(256, 384, 384, 384), processor, processor == ReconstructionProcessor.Amp ? 0 : -1, volumeCameraPose);
         }
 
         // Tracker "sift": the RGB feature chain verified by depth, kept for
@@ -554,6 +645,9 @@ namespace KinectHoard.App
                 { "tracker", Tracker },
                 { "poses", archived.Select(p => new Dictionary<string, object> { { "timestamp_ticks_utc", p.Ticks }, { "camera_to_world", Rigid.Rows(PoseOf(p)) }, { "foreground_runs", p.Runs } }).ToList() },
                 { "trajectory", tracked.Select(p => new Dictionary<string, object> { { "timestamp_ticks_utc", p.Ticks }, { "camera_to_world", Rigid.Rows(PoseOf(p)) }, { "status", p.Status } }).ToList() },
+                // Poses as they were when each view was fused, before later loop
+                // closures moved them: what the screen showed during the take.
+                { "trajectory_live", tracked.Select(p => new Dictionary<string, object> { { "timestamp_ticks_utc", p.Ticks }, { "camera_to_world", Rigid.Rows(p.Fixed) } }).ToList() },
                 { "frames_integrated", integrated }, { "frames_rejected", rejected },
                 { "tracking_recoveries", Tracker == "icp" ? icp.Relocalised : recoveries },
                 { "tracking", TrackingSummary() }, { "latency", timing.Summary() }, { "nonrigid_correction", false } };
@@ -568,7 +662,8 @@ namespace KinectHoard.App
             recording = false; finished = true; state = "exporting"; detail = "Cerrando la vuelta y guardando la malla...";
             // Last pose-graph solve over every loop found, then the volume
             // follows the corrected keyframes before the mesh is extracted.
-            if (Tracker == "icp" && icp.Finish()) Rebuild();
+            // An unfinished incremental rebuild leaves the shown volume stale.
+            if (Tracker == "icp" && (icp.Finish() | rebuildQueue != null)) Rebuild();
             using (var mesh = volume.CalculateMesh(1)) SaveMesh(Path.Combine(DirectoryPath, "scan.ply"), mesh);
             archive.CompleteAdding();
             finishTask = Task.Run(() =>
@@ -685,14 +780,14 @@ namespace KinectHoard.App
             if (finishTask != null) finishTask.GetAwaiter().GetResult();
             else if (integrated > 0)
             {
-                if (Tracker == "icp" && icp.Finish()) Rebuild();
+                if (Tracker == "icp" && (icp.Finish() | rebuildQueue != null)) Rebuild();
                 using (var mesh = volume.CalculateMesh(1)) SaveMesh(Path.Combine(DirectoryPath, "scan.ply"), mesh);
                 WriteJson(Path.Combine(DirectoryPath, "live.scan.json"), Journal(true));
             }
             try { anchorTask.Wait(); } catch (AggregateException) { }
             if (finder != null) finder.Dispose(); if (points != null) points.Dispose(); if (rendered != null) rendered.Dispose();
             features.Dispose();
-            if (color != null) color.Dispose(); if (smooth != null) smooth.Dispose(); if (depth != null) depth.Dispose(); if (volume != null) volume.Dispose();
+            if (color != null) color.Dispose(); if (smooth != null) smooth.Dispose(); if (depth != null) depth.Dispose(); if (volume != null) volume.Dispose(); if (spare != null) spare.Dispose();
             archive.Dispose();
             lock (gate) state = "closed";
         }
