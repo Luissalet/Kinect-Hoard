@@ -127,9 +127,12 @@ Kinect Fusion espera la imagen espejada del SDK. Hasta el 05-11-2026 recibía el
 fotograma canónico, de modo que su mundo, sus poses ICP y `scan.ply` quedaban con
 X negada, mientras el seguimiento RGBD, el archivo y la textura usaban la cámara
 sin espejar. En la silla 360 la malla nativa solo explicaba el 44 % de la
-profundidad observada; espejada, el 99,9 %. Ahora Fusion recibe la profundidad,
-el color y el punto principal espejados, la vista de superficie se devuelve a la
-orientación de cámara y `live.scan.json` declara `mesh_coordinate_space: camera`.
+profundidad observada; espejada, el 99,9 %. Ahora Fusion recibe la profundidad y
+el color espejados con el punto principal canónico (Fusion lo lee en la imagen
+espejada; espejarlo también desplaza la malla (W − 1 − 2·cx)/fx·z, 3,5 cm con la
+One a 1,2 m), la vista de superficie se devuelve a la orientación de cámara y
+`live.scan.json` declara `mesh_coordinate_space: camera`. Las tomas antiguas se
+corrigen con x' = −x + (W − 1 − 2·cx)/fx·z.
 `quality_scan.py --texture-live` y el refinado detectan las tomas antiguas sin
 esa marca y corrigen su malla antes de texturizar o medir.
 
