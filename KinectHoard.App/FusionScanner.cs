@@ -153,12 +153,12 @@ namespace KinectHoard.App
                 else
                 {
                     EnsureVolume(frame, masked);
-                    volume.DepthToDepthFloatFrame(masked, depth, .45f, 3.5f, false);
+                    volume.DepthToDepthFloatFrame(MirrorX(masked, frame.Width), depth, .45f, 3.5f, false);
                     volume.SmoothDepthFloatFrame(depth, smooth, 1, .04f);
                     var pixels = new int[frame.Width * frame.Height];
                     Buffer.BlockCopy(frame.Bgra, 0, pixels, 0, frame.Bgra.Length);
                     for (int i = 0; i < pixels.Length; i++) if (masked[i] == 0) pixels[i] = 0;
-                    color.CopyPixelDataFrom(pixels);
+                    color.CopyPixelDataFrom(MirrorX(pixels, frame.Width));
                     var view = features.Describe(frame, masked);
                     bool accepted = !initialized || Track(view);
                     if (accepted)
@@ -194,6 +194,7 @@ namespace KinectHoard.App
                 volume.CalculatePointCloud(points, rendered, orbit ? OrbitPose() : pose);
                 var pixels = new int[frame.Width * frame.Height];
                 rendered.CopyPixelDataTo(pixels);
+                pixels = MirrorX(pixels, frame.Width);
                 var bytes = new byte[pixels.Length * 4]; Buffer.BlockCopy(pixels, 0, bytes, 0, bytes.Length);
                 for (int i = 3; i < bytes.Length; i += 4) bytes[i] = 255;
                 using (var bitmap = FrameImage.Create(new CameraFrame { Width = frame.Width, Height = frame.Height, Bgra = bytes }))
@@ -215,6 +216,10 @@ namespace KinectHoard.App
             for (int i = 0; i < masked.Length; i += 4) if (masked[i] > 0)
             { xTotal += (i % frame.Width - intrinsics.Cx) * masked[i] / (1000 * intrinsics.Fx); yTotal += (i / frame.Width - intrinsics.Cy) * masked[i] / (1000 * intrinsics.Fy); count++; }
             center = new NumericVector((float)(xTotal / count), (float)(yTotal / count), zCenter);
+            // Fusion mirrors its input internally and reads the principal point in
+            // that mirrored image, which is where the canonical cx lands once the
+            // input itself is mirrored (MirrorX). Measured on replays: mirroring
+            // cx as well shifts the mesh by (W - 1 - 2 cx) / fx * z.
             var camera = new CameraParameters(intrinsics.Fx / frame.Width, intrinsics.Fy / frame.Height,
                 intrinsics.Cx / frame.Width, intrinsics.Cy / frame.Height);
             volume = ColorReconstruction.FusionCreateReconstruction(new ReconstructionParameters(256, 384, 384, 384), processor, processor == ReconstructionProcessor.Amp ? 0 : -1, pose);
@@ -241,6 +246,8 @@ namespace KinectHoard.App
             {
                 // ICP may slide along a smooth surface even after a good RGBD
                 // fit. Retain the pose verified by independent depth matches.
+                // Measured 05-11-2026 on the synthetic turn: accepting nearby ICP
+                // poses raised the rotation error from 32 to 37 degrees RMS.
                 candidate = guess;
                 success = true;
             }
@@ -343,7 +350,7 @@ namespace KinectHoard.App
                     archiveTask.GetAwaiter().GetResult();
                     WriteJson(Path.Combine(DirectoryPath, "live.scan.json"), new {
                         format = "KINECT_HOARD_LIVE_SCAN_1", model = Model, mode = Mode, target = Target,
-                        coordinate_space = "X right, Y down, Z forward, metres", poses,
+                        coordinate_space = "X right, Y down, Z forward, metres", mesh_coordinate_space = "camera", poses,
                         frames_integrated = integrated, frames_rejected = rejected, tracking_recoveries = recoveries,
                         nonrigid_correction = false
                     });
@@ -401,6 +408,19 @@ namespace KinectHoard.App
                 M41 = -NumericVector.Dot(position, right), M42 = -NumericVector.Dot(position, down), M43 = -NumericVector.Dot(position, forward), M44 = 1 };
         }
 
+        // Kinect Fusion's camera space expects the SDK's horizontally mirrored
+        // image: fed a canonical frame, its world, poses and meshes come out with
+        // X negated, while the RGBD feature tracker, the archive and the OBJ use
+        // the camera convention. Mirroring only Fusion's input keeps every pose
+        // and mesh in one convention.
+        private static T[] MirrorX<T>(T[] source, int width)
+        {
+            var result = new T[source.Length];
+            for (int row = 0; row < source.Length; row += width)
+                for (int x = 0; x < width; x++) result[row + x] = source[row + width - 1 - x];
+            return result;
+        }
+
         private static bool Finite(float value) { return !float.IsNaN(value) && !float.IsInfinity(value); }
         private static bool Plausible(FusionMatrix a, FusionMatrix b, float metres, float radians)
         {
@@ -456,6 +476,7 @@ namespace KinectHoard.App
                 using (var mesh = volume.CalculateMesh(1)) SaveMesh(Path.Combine(DirectoryPath, "scan.ply"), mesh);
                 WriteJson(Path.Combine(DirectoryPath, "live.scan.json"), new {
                     format = "KINECT_HOARD_LIVE_SCAN_1", model = Model, mode = Mode, target = Target,
+                    coordinate_space = "X right, Y down, Z forward, metres", mesh_coordinate_space = "camera",
                     poses, frames_integrated = integrated, interrupted = true, nonrigid_correction = false
                 });
             }
