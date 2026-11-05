@@ -475,6 +475,21 @@ def scan(sessions: list[Path], output: Path, report_path: Path, tracking: str = 
     return report
 
 
+def legacy_fusion_to_camera(intrinsic, np):
+    """Map a mesh saved before 05-11-2026 into the camera frame of its poses.
+
+    Fusion mirrors its input internally and read the principal point in the
+    mirrored image, so an unmirrored frame landed at x_f = -x + k z with
+    k = (W - 1 - 2 cx) / fx. The map is its own inverse (k ~ 0 for the 360).
+    """
+    fx, _ = intrinsic.get_focal_length()
+    cx, _ = intrinsic.get_principal_point()
+    transform = np.eye(4)
+    transform[0, 0] = -1.0
+    transform[0, 2] = (intrinsic.width - 1 - 2 * cx) / fx
+    return transform
+
+
 def texture_live(directory: Path) -> dict:
     """Bake original RGB onto the native live mesh using its accepted poses.
 
@@ -515,6 +530,9 @@ def texture_live(directory: Path) -> dict:
     mesh = o3d.io.read_triangle_mesh(str(directory / "scan.ply"))
     if not mesh.has_triangles():
         raise ValueError("El volumen no contiene una superficie exportable")
+    if manifest.get("mesh_coordinate_space") != "camera":
+        mesh.transform(legacy_fusion_to_camera(intrinsic, np))
+        mesh.triangles = o3d.utility.Vector3iVector(np.asarray(mesh.triangles)[:, ::-1].copy())
     # Fusion emits separate copies of shared vertices for each triangle.
     # Weld exact duplicates before UV unwrapping: otherwise xatlas sees a
     # disconnected triangle soup, creating seams and extremely slow packing.
@@ -522,10 +540,20 @@ def texture_live(directory: Path) -> dict:
     mesh.remove_degenerate_triangles()
     mesh.remove_duplicated_triangles()
     mesh.remove_unreferenced_vertices()
-    if len(mesh.triangles) > 200_000:
-        mesh = mesh.simplify_quadric_decimation(200_000)
+    # Thousands of loose fragments make xatlas packing take tens of minutes.
+    clusters, counts, _ = mesh.cluster_connected_triangles()
+    clusters, counts = np.asarray(clusters), np.asarray(counts)
+    small = counts < max(50, 0.03 * counts.max()) if len(counts) else np.zeros(0, dtype=bool)
+    fragments = int(small.sum())
+    if fragments:
+        mesh.remove_triangles_by_mask(small[clusters])
+        mesh.remove_unreferenced_vertices()
+    if len(mesh.triangles) > 150_000:
+        mesh = mesh.simplify_quadric_decimation(150_000)
     mesh.compute_vertex_normals()
     texture = _bake_texture(mesh, [group], [intrinsic], directory / "scan.obj", 2048, 32, np, o3d)
+    texture["fragments_removed"] = fragments
+    texture["mesh_x_mirrored_legacy"] = manifest.get("mesh_coordinate_space") != "camera"
     result = {**manifest, **texture, "vertices": len(mesh.vertices), "triangles": len(mesh.triangles),
               "texture_pose_source": "native live Fusion accepted poses"}
     (directory / "scan.scan.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
