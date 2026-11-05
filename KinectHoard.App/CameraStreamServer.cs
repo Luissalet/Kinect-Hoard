@@ -30,14 +30,16 @@ namespace KinectHoard.App
         private long frameNumber;
         private int bodyCount;
 
-        private CameraStreamServer(StreamKind stream, string model, bool quality, FusionScanner scanner) { this.stream = stream; this.model = model; this.quality = quality; this.scanner = scanner; }
+        private readonly ReplaySource replay;
 
-        internal static int Run(int port, StreamKind stream, int seconds, string model = "one", bool quality = false, FusionScanner scanner = null)
+        private CameraStreamServer(StreamKind stream, string model, bool quality, FusionScanner scanner, ReplaySource replay = null) { this.stream = stream; this.model = model; this.quality = quality; this.scanner = scanner; this.replay = replay; }
+
+        internal static int Run(int port, StreamKind stream, int seconds, string model = "one", bool quality = false, FusionScanner scanner = null, ReplaySource replay = null)
         {
             if (port < 1024 || port > 65535) throw new ArgumentOutOfRangeException("port");
             if (seconds < 0 || seconds > 86400) throw new ArgumentOutOfRangeException("seconds");
             if (model != "one" && model != "360") throw new ArgumentException("Modelo desconocido", "model");
-            var server = new CameraStreamServer(stream, model, quality, scanner);
+            var server = new CameraStreamServer(stream, model, quality, scanner, replay);
             DateTime until = seconds == 0 ? DateTime.MaxValue : DateTime.UtcNow.AddSeconds(seconds);
             using (var listener = new HttpListener())
             {
@@ -64,8 +66,32 @@ namespace KinectHoard.App
             return 0;
         }
 
+        // A recorded session instead of the sensor: same scanner, same API.
+        private void ReadReplay(DateTime until)
+        {
+            try
+            {
+                var last = replay.Run(scanner, () => stopRequested || DateTime.UtcNow >= until);
+                // Like a camera that keeps showing the last view, so orbit and
+                // follow still reach the scanner once the session has ended.
+                while (last != null && !stopRequested && DateTime.UtcNow < until)
+                {
+                    scanner.Process(last, replay.Calibration, replay.Mask(last));
+                    lock (gate) { frameNumber = replay.Delivered; lastFrameUtc = DateTime.UtcNow; }
+                    Thread.Sleep(100);
+                }
+            }
+            catch (Exception ex)
+            {
+                SetError("Reproducción: " + ex.GetBaseException().Message);
+                while (!stopRequested && DateTime.UtcNow < until) Thread.Sleep(200);
+            }
+            finally { scanner.Dispose(); }
+        }
+
         private void ReadCamera(DateTime until)
         {
+            if (replay != null && scanner != null) { ReadReplay(until); return; }
             ICameraBackend camera = null;
             DateTime lastReceived = DateTime.UtcNow;
             DateTime nextProbe = DateTime.MinValue;

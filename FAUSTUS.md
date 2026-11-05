@@ -9,7 +9,7 @@ La interfaz utiliza el tema y el copilot oficial de HoardLink, sin LLM propio.
 
 La portada es el menú de diez modos y 26 capacidades, con logo y referencias.
 `list_modes` devuelve recetas, acciones, fuentes y muestras. Nueve herramientas
-nuevas (33 entonces; 36 con las tres del refinado de tomas) publican lector compartido, datos de articulaciones, archivos,
+nuevas (33 entonces; 39 con las tres del refinado y las tres de reproducción) publican lector compartido, datos de articulaciones, archivos,
 demos, reproducción y Blender. `connect_blender` abre articulaciones One con RGBD o Skeleton y un armature
 animable en Blender; la vista limpia es una fuente Navegador para OBS. Guía:
 `docs/workspace.md`. La validación física confirmó los ocho flujos One, KHR y PLY
@@ -22,13 +22,17 @@ entre web y MCP; no se mata el proceso ajeno. Los errores del worker quedan en
 `data/*-worker.log`. Estado HTTP y captura de audio no consultan WMI por bloque.
 
 Escáner: inicio One fija/Persona, RGB con máscara corporal SDK, seguimiento
-rígido RGBD + Fusion nativo, superficie con color, pausa, finalización y exportación
-OBJ/MTL/PNG/PLY. La 360 móvil y las herramientas de estudio se conservan.
+en directo por ICP con color contra vistas clave sobre el sujeto enmascarado
+(`ColorIcpTracker.cs`, `LiveIcpTracker.cs`, `SubjectGate.cs`: máscara del
+refinado, descarte de brazos que se mueven, recolocación por giros del sujeto y
+SIFT, cierre de la vuelta con grafo de poses que rehace el volumen) + Fusion
+nativo, superficie con color, pausa, finalización y exportación OBJ/MTL/PNG/PLY.
+`tracker: sift` conserva el seguidor anterior para comparar. La 360 móvil y las herramientas de estudio se conservan.
 `open_studio` abre el estudio nativo después de desconectar el escáner.
 
 Estado real: ambas cámaras dieron RGBD en directo; una silla estática 360 produjo
 superficie y atlas. El busto dual anterior fue rechazado y una prueba One en modo
-Objeto perdió seguimiento. Las pruebas sintéticas rápidas muestran deriva: no
+Objeto perdió seguimiento (con el seguidor SIFT anterior). No
 se acredita giro humano natural completo ni calidad comercial. No hay corrección
 no rígida ni segmentación semántica general de objetos. No anunciar esas funciones
 como resueltas. Investigación y límites: `docs/scanner-research.md`.
@@ -48,6 +52,18 @@ con X negada respecto a las poses); `live.scan.json` marca
 `mesh_coordinate_space: camera` y las tomas antiguas se corrigen al texturizar o
 medir. Benchmark reproducible: `tests/turn_synthetic.py` + `--scanner-replay` +
 `tests/turn_benchmark.py`; prueba automática `tests/turn-refine-smoke.py`.
+Reproducir como en directo (05-11-2026): `LiveReplaySource.cs` pasa una toma
+guardada o la persona sintética (`captures/synthetic-*`) por `FusionScanner.Process`
+al ritmo de sus marcas de tiempo (descarta fotogramas si se retrasa); botón
+**Reproducir como en directo**, `/api/scanner/replay`, `/api/scanner/replays`,
+`/api/scanner/replay-score` y MCP `replay_live_capture`, `list_live_replays`,
+`replay_score`; `replay_score.py` mide `captures/replay-*`. Persona sintética:
+0,56° RMS / 2,2° máx. / 0,55° final (SIFT 35,5° / 67,7° / 8,5°), superficie a
+1,65 mm y 82 % de completitud, residuo 2,1 mm, seguimiento 11 ms y proceso 20 ms
+por fotograma (mediana; p95 55 ms en este equipo). Toma real 19-10: 108 de 109
+vistas seguidas, pares de control 3,1° de mediana (grabado en directo 11,3°,
+refinado 1,1°), solape 77 %, residuo 4,4 mm (grabado 820 mm). Prueba
+`tests/live-replay.py`.
 Prueba física pendiente y su criterio de aprobado: `PENDIENTES.md`.
 Las imágenes permanecen locales; la UI no envía píxeles al copilot automáticamente.
 

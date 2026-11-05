@@ -8,12 +8,17 @@
   Fusion en directo recibe ahora la imagen espejada que espera, de modo que su
   malla y sus poses comparten la convención de cámara (malla nativa estática:
   0,8 mm de mediana a la verdad, antes 12 mm).
-- Llevar al seguimiento en directo lo que el refinado ya mide mejor: la persona
-  sintética deriva 32° RMS con el seguidor nativo de rasgos SIFT y 2,0° con el
-  ICP con color contra modelo. Medir con `tests/turn_benchmark.py` antes y
-  después; un contador de fotogramas aceptados no acredita precisión.
-- Cierre de la vuelta en directo (no solo al refinar), para que la superficie que
-  crece en pantalla no se duplique al volver al frente.
+- Hecho el 05-11-2026: seguimiento en directo por ICP con color contra vistas
+  clave sobre el sujeto enmascarado, descarte de brazos que se mueven,
+  recolocación y cierre de la vuelta en directo con grafo de poses que rehace el
+  volumen; **Reproducir como en directo** (UI, REST, MCP `replay_live_capture`)
+  lo mide sin cámara. Persona sintética al ritmo real: 0,56° RMS (SIFT 35,5°);
+  toma real 19-10: pares de control 3,1° de mediana (antes 11,3°).
+- Bajar el p95 por fotograma (55 ms en este equipo) por debajo de 33 ms: el pico
+  está en rehacer el volumen tras un cierre; hacerlo en un segundo volumen en
+  segundo plano y cambiarlo al terminar.
+- Acercar la toma real al refinado (3,1° frente a 1,1° en pares de control):
+  registrar también contra el volumen raycast y no solo contra vistas clave.
 - Compensar cambios de postura mayores que el umbral de 1,5 cm con un campo de
   deformación (SurfelWarp, BSD-3, es el candidato con licencia utilizable).
 - Aislar objetos sin incorporar soportes o mobiliario en contacto.

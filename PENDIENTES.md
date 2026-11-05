@@ -43,10 +43,25 @@ vuelta completa.
 | Profundidad explicada a 1 cm | ≥ 85 % |
 | Piezas sueltas de la malla | ≤ 3 |
 
+**Criterio del seguimiento en directo** (columna *Nativo* de la misma tabla, que
+ahora es el ICP con color en directo; o `live.scan.json` → `tracking`/`latency`)
+
+| Medida | Aprobado |
+| --- | --- |
+| Error de pose en pares de control (mediana) | ≤ 3° |
+| Solape a 1 cm en pares de control (mediana) | ≥ 75 % |
+| Residuo malla–profundidad (mediana) | ≤ 6 mm |
+| Cierres de vuelta en directo (`loop_closures`) | ≥ 1 |
+| Seguimiento por fotograma (`track_ms_median`) | ≤ 20 ms |
+
+Durante la toma, en la vista derecha, la superficie no debe duplicarse al volver
+a ver tu frente. Sin cámara, **Reproducir como en directo** sobre la toma del
+19-10 (a 0,6 m, sin vuelta completa) da 3,1° (justo por encima), 77 % y 4,4 mm.
+
 Y a la vista, abriendo `refined.obj`: cabeza, hombros, espalda y pecho cerrados,
 sin nariz ni orejas duplicadas y sin colores de delante pintados detrás. Con la
-persona sintética el refinado ya da 2,0° RMS y 0,8 mm de mediana; el nativo,
-32,4° y 33 mm.
+persona sintética el refinado ya da 2,0° RMS y 0,8 mm de mediana; el seguidor
+SIFT anterior, 32,4° y 33 mm; el ICP en directo, 0,56° y 1,65 mm.
 
 **Qué devolver:** el nombre de la carpeta `captures/live-…` (se queda en el
 equipo; no hace falta enviar archivos). Con eso se cierra #939 o se ajusta el

@@ -26,6 +26,14 @@ async def main() -> None:
         assert not captures.is_error
         invalid = await client.call_tool("refine_status", {"capture": "../captures"})
         assert invalid.is_error
+        assert {"replay_live_capture", "list_live_replays", "replay_score"} <= names
+        replays = await client.call_tool("list_live_replays", {})
+        assert not replays.is_error
+        for arguments in ({"capture": "../captures"}, {"tracker": "fusion"}, {"speed": 9}):
+            rejected = await client.call_tool("replay_live_capture", arguments)
+            assert rejected.is_error, arguments
+        outside_replay = await client.call_tool("replay_score", {"replay": "../captures"})
+        assert outside_replay.is_error
         assert {"list_capabilities", "get_capability", "read_hoard_source", "sensor_status", "capture_artifact", "record_session", "record_audio", "recognize_speech", "analyze_face", "capture_face3d", "scan_head", "capture_gestures", "analyze_gesture_session", "scan_3d", "fuse_session", "session_info"} <= names
         listing = await client.call_tool("list_capabilities", {"generation": "one"})
         assert not listing.is_error
