@@ -57,6 +57,13 @@ def main() -> None:
         assert tracking["subject_absent_frames"] == 0 and tracking["lost"] <= 2, tracking
         latency = score["latency"]
         assert latency["frames"] >= journal["frames_integrated"] and latency["process_ms_median"] > 0, latency
+        # The volume rebuild after a loop closure is spread over frames into a
+        # spare volume: it used to stall one frame for 150-450 ms.
+        assert tracking["volume_rebuilds"] >= 1 and not tracking["rebuild_in_progress"], tracking
+        assert latency["rebuild_ms_max"] < 80, latency
+        # Poses as fused live, before later loop closures moved them.
+        live = score["synthetic"]["trajectory_live"]
+        assert live and live["frames"] == trajectory["frames"] and live["rotation_deg_rms"] < 6.0, live
         assert score["mesh"]["depth_residual_mm_median"] < 6.0, score["mesh"]
         assert score["synthetic"]["surface"]["completeness_within_1cm"] > 0.6, score["synthetic"]["surface"]
         assert len(journal["trajectory"]) == score["frames_tracked"] >= len(journal["poses"])

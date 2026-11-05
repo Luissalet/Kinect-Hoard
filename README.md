@@ -19,8 +19,10 @@ el fondo; la superficie con color crece en directo y **Finalizar y texturizar**
 exporta OBJ, MTL y PNG. En directo, la pose sale de un ICP con color contra las
 vistas clave sobre el sujeto enmascarado, con recolocación, descarte de brazos
 que se mueven y cierre de la vuelta con grafo de poses (rehace el volumen al
-corregir); con la persona sintética reproducida al ritmo real da 0,56° RMS de
-rotación (35,5° el seguidor SIFT anterior) y 11 ms de seguimiento por fotograma.
+corregir en un segundo volumen, repartido entre fotogramas); con la persona
+sintética reproducida al ritmo real da 0,56° RMS de rotación a 10 fps y 0,83° a
+30 fps (35,5° el seguidor SIFT anterior), 11 ms de seguimiento por fotograma y
+el 91 % de los fotogramas dentro de 33 ms a 30 fps.
 **Reproducir como en directo** pasa una toma guardada o la persona sintética por
 ese mismo motor al ritmo de sus marcas de tiempo y la mide (también MCP
 `replay_live_capture`). **Refinar una toma** vuelve a procesar cualquier toma

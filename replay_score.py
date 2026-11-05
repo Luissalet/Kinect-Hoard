@@ -163,10 +163,15 @@ def score(replay: Path) -> dict:
         truth = _poses(truth_report["poses"])
         traj, align = trajectory_error(truth, tracked)
         archived_traj, _ = trajectory_error(truth, archived)
+        # "trajectory" holds the poses after the last pose-graph solve; the
+        # poses each view was fused with show the drift seen during the take.
+        live = _poses(manifest.get("trajectory_live"))
+        live_traj = trajectory_error(truth, live)[0] if live else None
         rigid = o3d.io.read_triangle_mesh(str(source / "ground_truth_rigid.ply"))
         arms = o3d.io.read_triangle_mesh(str(source / "ground_truth_arms.ply"))
         result["synthetic"] = {"turns": truth_report.get("turns"), "frames": len(truth),
-                               "trajectory": traj, "trajectory_archived": archived_traj,
+                               "fps": truth_report.get("fps"),
+                               "trajectory": traj, "trajectory_live": live_traj, "trajectory_archived": archived_traj,
                                "surface": surface(replay / "scan.ply", align, rigid, arms)}
 
     if (source / "refined" / "refine.json").is_file():
