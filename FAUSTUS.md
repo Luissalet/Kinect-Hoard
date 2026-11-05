@@ -9,7 +9,7 @@ La interfaz utiliza el tema y el copilot oficial de HoardLink, sin LLM propio.
 
 La portada es el menú de diez modos y 26 capacidades, con logo y referencias.
 `list_modes` devuelve recetas, acciones, fuentes y muestras. Nueve herramientas
-nuevas (33 en total) publican lector compartido, datos de articulaciones, archivos,
+nuevas (33 entonces; 36 con las tres del refinado de tomas) publican lector compartido, datos de articulaciones, archivos,
 demos, reproducción y Blender. `connect_blender` abre articulaciones One con RGBD o Skeleton y un armature
 animable en Blender; la vista limpia es una fuente Navegador para OBS. Guía:
 `docs/workspace.md`. La validación física confirmó los ocho flujos One, KHR y PLY
@@ -35,6 +35,20 @@ como resueltas. Investigación y límites: `docs/scanner-research.md`.
 
 Las tomas están en `captures/live-*`: sesión RGBD, intrínsecos, poses/máscara,
 malla y textura si finalizó la exportación. No borrar capturas al corregir el motor.
+
+Refinado sin cámara (05-11-2026): `turn_refine.py` y las herramientas
+`list_live_captures`, `refine_live_scan`, `refine_status` (también botón
+**Refinar giro** y `/api/scanner/refine`) escriben `refined/` en cada toma con
+OBJ/MTL/PNG/PLY y `refine.json`. Persona sintética girando con brazos en
+movimiento: 2,0° RMS frente a 32,4° del seguimiento nativo, superficie a 0,8 mm
+de la verdad frente a 33 mm. Toma real de Luis: error de pose en pares de control
+1,1° frente a 11,3°, sin las 187 vistas sin sujeto que integraba el nativo.
+Fusion en directo recibe ya la imagen espejada que espera (antes su malla quedaba
+con X negada respecto a las poses); `live.scan.json` marca
+`mesh_coordinate_space: camera` y las tomas antiguas se corrigen al texturizar o
+medir. Benchmark reproducible: `tests/turn_synthetic.py` + `--scanner-replay` +
+`tests/turn_benchmark.py`; prueba automática `tests/turn-refine-smoke.py`.
+Prueba física pendiente y su criterio de aprobado: `PENDIENTES.md`.
 Las imágenes permanecen locales; la UI no envía píxeles al copilot automáticamente.
 
 ## Icono de la familia (2026-11-02)

@@ -146,6 +146,110 @@ def control_live_scan(action: str, x: float = 0, y: float = 0) -> dict[str, Any]
     return _live_request(f"{action}?x={x}&y={y}", True)
 
 
+def _live_capture(capture: str) -> Path:
+    """Resolve a captures/live-* folder by name; empty means the newest one with archived frames."""
+    if not capture:
+        folders = sorted((p for p in CAPTURE_DIR.glob("live-*") if (p / "live.scan.json").is_file()
+                          and (p / "session.khr").is_file()), key=lambda p: p.name, reverse=True)
+        if not folders:
+            raise FileNotFoundError("No hay tomas del escáner en directo con fotogramas archivados")
+        return folders[0]
+    if Path(capture).name != capture or not capture.startswith("live-"):
+        raise ValueError("Indica el nombre de una carpeta live-* de captures/")
+    folder = CAPTURE_DIR / capture
+    if not (folder / "live.scan.json").is_file() or not (folder / "session.khr").is_file():
+        raise FileNotFoundError("La toma no conserva session.khr y live.scan.json")
+    return folder
+
+
+def _refine_summary(folder: Path) -> dict[str, Any]:
+    refined = folder / "refined"
+    result: dict[str, Any] = {"capture": folder.name, "state": "not_started"}
+    progress = refined / "progress.json"
+    if progress.is_file():
+        try:
+            result.update(json.loads(progress.read_text(encoding="utf-8")))
+        except ValueError:
+            result["state"] = "running"
+    job = refined / "job.json"
+    if result["state"] == "running" and job.is_file():
+        pid = json.loads(job.read_text(encoding="utf-8")).get("pid")
+        alive = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/NH"], capture_output=True, text=True,
+                               creationflags=subprocess.CREATE_NO_WINDOW).stdout
+        if str(pid) not in alive:
+            result.update(state="error", detail="El proceso de refinado terminó sin informe; consulta refined/refine.log")
+    report = refined / "refine.json"
+    if result["state"] == "finished" and report.is_file():
+        data = json.loads(report.read_text(encoding="utf-8"))
+        metrics = data["metrics"]
+        result.update({
+            "frames": data["frames"], "subject_frames": data["subject_frames"],
+            "tracked_frames": len(data["poses"]), "relocalised": data["relocalised"], "lost": data["lost"],
+            "loop_edges": data["loop_edges"], "turn_coverage": metrics["refined"].get("turn_coverage"),
+            "nonrigid_pixels_removed_median": data["nonrigid_pixels_removed_median"],
+            "native": metrics["native"], "odometry_only": metrics["odometry_only"], "refined": metrics["refined"],
+            "files": {name: f"/api/workspace/file/{folder.name}/refined/{name}"
+                      for name in ("refined.obj", "refined.mtl", "refined-albedo.png", "refined.ply", "refine.json")
+                      if (refined / name).is_file()},
+            "seconds": data["seconds"]})
+    return result
+
+
+@mcp.tool()
+def list_live_captures() -> list[dict[str, Any]]:
+    """List live scanner takes (captures/live-*) with archived frames, native outputs and refinement state."""
+    rows = []
+    for folder in sorted(CAPTURE_DIR.glob("live-*"), key=lambda p: p.name, reverse=True):
+        if not (folder / "live.scan.json").is_file() or not (folder / "session.khr").is_file():
+            continue
+        manifest = json.loads((folder / "live.scan.json").read_text(encoding="utf-8"))
+        summary = _refine_summary(folder)
+        rows.append({"capture": folder.name, "model": manifest.get("model"), "mode": manifest.get("mode"),
+                     "target": manifest.get("target"), "archived_frames": len(manifest.get("poses", [])),
+                     "native_obj": (folder / "scan.obj").is_file(), "refine_state": summary["state"],
+                     "refined_obj": (folder / "refined" / "refined.obj").is_file()})
+    return rows
+
+
+@mcp.tool()
+def refine_live_scan(capture: str = "", texture: bool = True, radius_metres: float = 0.5) -> dict[str, Any]:
+    """Refine a finished live turn scan offline, without the camera, and keep the native result.
+
+    Masks the subject (floor, background, cylinder around its axis), tracks it
+    with coarse-to-fine coloured ICP, closes loops after a full turn with a pose
+    graph, removes per-frame pixels of moving limbs, fuses a TSDF and bakes an
+    OBJ/MTL/PNG atlas into captures/<capture>/refined/. Empty capture = newest
+    take. Runs in the background: poll refine_status for progress and the
+    before/after metrics (native vs refined).
+    """
+    if not 0.2 <= radius_metres <= 1.5:
+        raise ValueError("radius_metres debe estar entre 0,2 y 1,5")
+    folder = _live_capture(capture)
+    current = _refine_summary(folder)
+    if current["state"] == "running":
+        return current
+    refined = folder / "refined"
+    refined.mkdir(exist_ok=True)
+    for name in ("progress.json", "refine.json"):
+        (refined / name).unlink(missing_ok=True)
+    (refined / "progress.json").write_text(json.dumps({"state": "running", "stage": "starting", "progress": 0}),
+                                          encoding="utf-8")
+    command = [*_scan_command(), "--refine-live", str(folder), "--radius", str(radius_metres)]
+    if not texture:
+        command.append("--no-texture")
+    with (refined / "refine.log").open("wb") as log:
+        process = subprocess.Popen(command, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT,
+                                   creationflags=subprocess.CREATE_NO_WINDOW)
+    (refined / "job.json").write_text(json.dumps({"pid": process.pid, "command": command}), encoding="utf-8")
+    return {"capture": folder.name, "state": "running", "pid": process.pid}
+
+
+@mcp.tool()
+def refine_status(capture: str = "") -> dict[str, Any]:
+    """Progress of refine_live_scan and, when finished, native vs refined metrics and download paths."""
+    return _refine_summary(_live_capture(capture))
+
+
 @mcp.tool()
 def open_studio() -> dict[str, Any]:
     """Open the Kinect studio: camera streams, recording, face, audio, gestures and geometry."""

@@ -218,6 +218,33 @@ def control(command: Command):
         raise HTTPException(400, str(exc)) from exc
 
 
+@app.get("/api/scanner/captures")
+def live_captures():
+    return toolkit.list_live_captures()
+
+
+class RefineCommand(BaseModel):
+    capture: str = ""
+    texture: bool = True
+    radius_metres: float = 0.5
+
+
+@app.post("/api/scanner/refine")
+def refine(command: RefineCommand):
+    try:
+        return toolkit.refine_live_scan(command.capture, command.texture, command.radius_metres)
+    except (ValueError, OSError, RuntimeError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.get("/api/scanner/refine")
+def refine_state(capture: str = ""):
+    try:
+        return toolkit.refine_status(capture)
+    except (ValueError, OSError) as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
 @app.get("/api/scanner/{view}.png")
 def preview(view: str):
     if view not in ("preview", "surface"):

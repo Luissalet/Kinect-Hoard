@@ -51,14 +51,87 @@ una mesa o silla en contacto: todavía no equivale a segmentación semántica de
 objetos. El volumen inicial mide 1,5 m de lado y usa vóxeles de 3,90625 mm.
 Necesita runtime Kinect v2 y GPU compatible con Fusion AMP.
 
-El seguimiento actual es rígido. La compensación de postura, cuello, ropa y
-objetos deformables **no está implementada**. Tampoco se da por resuelto el giro
-natural de personas al añadir estos controles. Vistas RGB y casos sintéticos no
+El seguimiento en directo es rígido. La compensación de postura, cuello, ropa y
+objetos deformables con un campo de deformación **no está implementada**; el
+refinado sin cámara (abajo) descarta por vista el movimiento pequeño de brazos y
+manos. El giro natural completo de una persona sigue pendiente de la prueba
+física de `PENDIENTES.md`. Vistas RGB y casos sintéticos no
 acreditan por sí solos calidad de busto u objeto físico. Las superficies con
 pocas referencias de forma/color necesitan validación adicional.
 
 La [investigación de motores](scanner-research.md) recoge alternativas y sus
 límites, incluidas reconstrucción no rígida y segmentación aprendida.
+
+## Refinado sin cámara
+
+**Refinar una toma**, debajo del estado, vuelve a procesar una toma guardada
+(`captures/live-*`) sin abrir el sensor y conserva el resultado nativo. Escribe
+`refined/refined.obj`, `.mtl`, `refined-albedo.png`, `refined.ply` y
+`refine.json` (`turn_refine.py`, también `fusion.py --refine-live CARPETA`):
+
+1. **Sujeto:** banda de profundidad, plano del suelo, componentes separadas por
+   saltos de profundidad, cilindro vertical alrededor del eje del sujeto y una
+   prueba de continuidad que descarta vistas en las que el sujeto salió del
+   encuadre o la máscara saltó a otra superficie.
+2. **Seguimiento:** ICP con color de grueso a fino (2 cm, 1 cm, 5 mm) con núcleo
+   robusto de Tukey contra las últimas vistas clave y predicción de velocidad
+   constante. Si falla, se reintenta con escala gruesa de 4 cm y después con
+   FPFH + RANSAC contra todas las vistas clave. Una recolocación justo después de
+   una vista seguida no puede alejarse más de 30° de la predicción, y las
+   propuestas se ordenan por solape × coincidencia de cromaticidad: un torso casi
+   simétrico ya no se da la vuelta 180°.
+3. **Cierre de la vuelta:** pares que vuelven a ver el mismo lado tras más de
+   150° de giro se registran por separado; un grafo de poses (Levenberg-Marquardt
+   con poda de aristas inciertas) reparte la deriva.
+4. **Movimiento no rígido pequeño:** el núcleo robusto ignora brazos y manos
+   durante el seguimiento; antes de la fusión final, en cada vista se eliminan los
+   píxeles a más de 1,5 cm de una primera superficie de consenso. No hay campo de
+   deformación: cambios de postura mayores se descartan, no se modelan.
+5. **Fusión y atlas:** TSDF de 4 mm, eliminación de fragmentos sueltos y atlas
+   desde el RGB original de una vista por sector alrededor del sujeto.
+
+`refine.json` mide con las mismas máscaras la trayectoria y la malla nativas y
+las refinadas: solape a 1 cm y error de pose en pares de control (15–45° de
+separación, registrados de forma independiente y fuera del grafo), error de
+cierre de la vuelta, residuo malla–profundidad, profundidad explicada a 1 cm,
+piezas de la malla y giro cubierto. La interfaz lo muestra como tabla.
+
+Resultados medidos el 05-11-2026:
+
+| Toma | Medida | Nativo | Refinado |
+| --- | --- | --- | --- |
+| Persona sintética girando 1,12 vueltas, brazos ±12°, 132 vistas (verdad conocida) | Error de rotación RMS / máx. / final | 32,4° / 56,5° / 6,0° | 2,0° / 7,7° / 1,6° |
+| | Superficie: mediana a la verdad / completitud a 1 cm | 33,4 mm / 44 % | 0,8 mm / 82 % |
+| Toma real One, Luis girando (296 vistas, 187 sin sujeto) | Error de pose en pares de control (mediana / p90) | 11,3° / 23,1° | 1,1° / 11,0° |
+| | Solape a 1 cm en pares de control | 36 % | 87 % |
+| | Error al cerrar la vuelta (mediana, antes → después del grafo) | — | 1,5° → 0,3° |
+| | Residuo malla–profundidad (mediana) / piezas | 820 mm (pared integrada) / 7831 | 3,3 mm / 1 |
+| | Vistas integradas sin sujeto | 187 | 0 |
+| Silla 360 estática (78 vistas) | Residuo malla–profundidad (mediana) | 7,1 mm (1,7 mm con X corregida) | 0,9 mm |
+
+La toma real de persona no contiene una vuelta completa: Luis estaba a
+0,6–0,75 m, fuera del encuadre en gran parte de la toma y la máscara antigua
+saltó a la pared. Sirve para medir el seguimiento, no para acreditar un busto
+de 360°. La prueba física pendiente está en `PENDIENTES.md`.
+
+`tests/turn_synthetic.py` genera la persona sintética con ruido de Kinect, suelo,
+pared y una caja junto al sujeto; `tests/turn_benchmark.py` puntúa una
+reproducción nativa (`--scanner-replay`) y su refinado contra la verdad, y
+`tests/turn-refine-smoke.py` es la prueba automática. `tests/fusion-convention.py`
+reproduce una persona estática con el motor Fusion en CPU y comprueba que la
+malla nativa queda en el marco de sus poses (0,76 mm de mediana a la verdad).
+
+## Convención de coordenadas
+
+Kinect Fusion espera la imagen espejada del SDK. Hasta el 05-11-2026 recibía el
+fotograma canónico, de modo que su mundo, sus poses ICP y `scan.ply` quedaban con
+X negada, mientras el seguimiento RGBD, el archivo y la textura usaban la cámara
+sin espejar. En la silla 360 la malla nativa solo explicaba el 44 % de la
+profundidad observada; espejada, el 99,9 %. Ahora Fusion recibe la profundidad,
+el color y el punto principal espejados, la vista de superficie se devuelve a la
+orientación de cámara y `live.scan.json` declara `mesh_coordinate_space: camera`.
+`quality_scan.py --texture-live` y el refinado detectan las tomas antiguas sin
+esa marca y corrigen su malla antes de texturizar o medir.
 
 ## API y MCP
 
@@ -78,3 +151,11 @@ La utilidad nativa `--scanner-replay SESION MODELO MODO DIRECTORIO cpu|amp` prue
 la misma reconstrucción con capturas existentes, sin accionar el sensor.
 `quality_scan.py --texture-live DIRECTORIO` reintenta solo el atlas de una toma
 que ya conserva malla y poses.
+
+Refinado: `list_live_captures()`, `refine_live_scan(capture, texture, radius_metres)`
+y `refine_status(capture)` en MCP y en `/api/agent/*`; la página usa
+`GET /api/scanner/captures`, `POST /api/scanner/refine` y
+`GET /api/scanner/refine?capture=live-...`. `capture` vacío elige la toma más
+reciente. El trabajo corre en segundo plano (`refined/progress.json`,
+`refined/refine.log`); los archivos se descargan desde
+`/api/workspace/file/<toma>/refined/<archivo>`.

@@ -16,9 +16,17 @@ y puede grabar keyframes. La salida limpia sirve como fuente Navegador para OBS.
 
 Dentro del escáner, el flujo inicial es **One · Cámara fija · Persona**. La máscara corporal separa
 el fondo; la superficie con color crece en directo y **Finalizar y texturizar**
-exporta OBJ, MTL y PNG. El seguimiento es experimental: el giro natural completo
-de una persona **todavía no está validado** y no hay corrección no rígida de
-postura. Consulta [escáner en directo](docs/live-scanner.md) para los controles,
+exporta OBJ, MTL y PNG. **Refinar una toma** vuelve a procesar cualquier toma
+guardada sin abrir la cámara: separa al sujeto del suelo y del fondo, lo sigue con
+ICP con color de grueso a fino, cierra la vuelta completa con un grafo de poses,
+descarta en cada vista los brazos o manos que se movieron y exporta
+`refined.obj` con atlas, junto a una tabla nativo/refinado con las mismas
+máscaras. Con una persona sintética girando con los brazos en movimiento, el error
+de rotación baja de 32,4° RMS (seguimiento en directo) a 2,0°, y la superficie
+queda a 0,8 mm de mediana de la verdad (33 mm la nativa). El giro natural completo
+de una persona real **todavía no está validado** (prueba física en
+`PENDIENTES.md`) y no hay campo de deformación para cambios grandes de postura.
+Consulta [escáner en directo](docs/live-scanner.md) para los controles,
 las salidas reales y las limitaciones. La aplicación nativa y sus herramientas
 anteriores siguen disponibles con el comando de abajo.
 
