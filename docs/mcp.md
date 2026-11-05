@@ -14,8 +14,12 @@ Con Python 3.11 o superior y la aplicación compilada o extraída del ZIP:
 Faustus admite el manifiesto raíz `faustus-plugin.json`, id `kinect-hoard`.
 `setup-mcp.ps1` prepara el servidor web en 64321, su `/api/health` y el comando
 MCP stdio. El Hub lo abre bajo demanda; consultar herramientas no abre cámaras.
-La UI presenta diez modos, fuentes y contratos. Las 33 herramientas se publican
+La UI presenta diez modos, fuentes y contratos. Las 36 herramientas se publican
 también por el contrato compartido `/api/agent/tools` y `/api/agent/call`.
+
+`list_live_captures`, `refine_live_scan(capture, texture, radius_metres)` y
+`refine_status(capture)` refinan sin cámara una toma `captures/live-*` y
+devuelven las métricas nativo/refinado ([escáner en directo](live-scanner.md)).
 
 Los [modos y puentes](workspace.md) añaden `list_modes`, `start_camera`,
 `camera_status`, `get_live_frame`, `close_camera`, `list_artifacts`, `open_demo`,
@@ -33,6 +37,9 @@ en su armature y puede insertar keyframes. La salida limpia está en `/camera-ou
 | `start_live_scan(mode, generation, subject)` | Abre vista previa del escáner: cámara móvil/fija y persona/objeto |
 | `live_scan_status()` | Modo, seguimiento y estado real de exportación del escáner en directo |
 | `control_live_scan(action, x, y)` | Iniciar, pausar, finalizar, cerrar, seleccionar sujeto y girar/restaurar la vista |
+| `list_live_captures()` | Tomas del escáner con fotogramas archivados, salida nativa y estado del refinado |
+| `refine_live_scan(capture, texture, radius_metres)` | Refinado sin cámara en segundo plano: OBJ/MTL/PNG/PLY en `refined/` |
+| `refine_status(capture)` | Progreso, métricas nativo/refinado y rutas de descarga |
 | `capture_artifact(kind, generation)` | Crea PNG, PGM, JSON o PLY bajo `captures/` y devuelve la ruta; `generation` puede ser `one` o `360` |
 | `record_session(stream, seconds, generation)` | Graba una sesión `.khr` local; el backend nativo 360 admite Color, Depth, Infrared y ColorDepth |
 | `record_audio(seconds)` | Intenta grabar WAV de One; devuelve error si el runtime no produce muestras |

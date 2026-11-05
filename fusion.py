@@ -219,6 +219,11 @@ def main() -> None:
         from quality_scan import texture_live
         print(texture_live(Path(sys.argv[2]))["obj"])
         return
+    if len(sys.argv) >= 3 and sys.argv[1] == "--refine-live":
+        sys.argv.pop(1)
+        from turn_refine import main as refine_main
+        refine_main()
+        return
     if "--calibrate" in sys.argv[1:]:
         sys.argv.remove("--calibrate")
         from dual_calibration import main as calibration_main
