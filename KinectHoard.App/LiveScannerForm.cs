@@ -19,16 +19,22 @@ namespace KinectHoard.App
             return root;
         }
 
-        internal static void Texture(string directory)
+        internal static void Texture(string directory) { Run(directory, "quality_scan.py", "--texture-live", "texture.log"); }
+
+        // Scores a replay against its reference (ground truth or the offline
+        // refine's control pairs) and writes replay-score.json beside it.
+        internal static void Score(string directory) { Run(directory, "replay_score.py", "--score-replay", "score.log"); }
+
+        private static void Run(string directory, string script, string option, string logName)
         {
             string root = Root();
             string python = Path.Combine(root, ".venv-scan", "Scripts", "python.exe");
             string bundled = Path.Combine(root, "KinectHoard.Fusion.exe");
-            bool source = File.Exists(python) && File.Exists(Path.Combine(root, "quality_scan.py"));
+            bool source = File.Exists(python) && File.Exists(Path.Combine(root, script));
             if (!source && !File.Exists(bundled)) throw new FileNotFoundException("Falta el motor de texturas; ejecuta setup-scan.ps1.");
             var start = new ProcessStartInfo {
                 FileName = source ? python : bundled,
-                Arguments = (source ? "\"" + Path.Combine(root, "quality_scan.py") + "\" " : "") + "--texture-live \"" + directory + "\"",
+                Arguments = (source ? "\"" + Path.Combine(root, script) + "\" " : "") + option + " \"" + directory + "\"",
                 WorkingDirectory = root, UseShellExecute = false, CreateNoWindow = true,
                 WindowStyle = ProcessWindowStyle.Hidden, RedirectStandardOutput = true, RedirectStandardError = true
             };
@@ -37,7 +43,7 @@ namespace KinectHoard.App
                 var stdout = process.StandardOutput.ReadToEndAsync();
                 var stderr = process.StandardError.ReadToEndAsync();
                 process.WaitForExit(); Task.WaitAll(stdout, stderr);
-                File.WriteAllText(Path.Combine(directory, "texture.log"), stdout.Result + stderr.Result);
+                File.WriteAllText(Path.Combine(directory, logName), stdout.Result + stderr.Result);
                 if (process.ExitCode != 0) throw new InvalidOperationException(stderr.Result.Trim());
             }
         }

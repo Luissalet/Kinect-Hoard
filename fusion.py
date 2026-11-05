@@ -219,6 +219,10 @@ def main() -> None:
         from quality_scan import texture_live
         print(texture_live(Path(sys.argv[2]))["obj"])
         return
+    if len(sys.argv) == 3 and sys.argv[1] == "--score-replay":
+        from replay_score import main as score_main
+        score_main()
+        return
     if len(sys.argv) >= 3 and sys.argv[1] == "--refine-live":
         sys.argv.pop(1)
         from turn_refine import main as refine_main

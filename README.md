@@ -16,14 +16,21 @@ y puede grabar keyframes. La salida limpia sirve como fuente Navegador para OBS.
 
 Dentro del escáner, el flujo inicial es **One · Cámara fija · Persona**. La máscara corporal separa
 el fondo; la superficie con color crece en directo y **Finalizar y texturizar**
-exporta OBJ, MTL y PNG. **Refinar una toma** vuelve a procesar cualquier toma
+exporta OBJ, MTL y PNG. En directo, la pose sale de un ICP con color contra las
+vistas clave sobre el sujeto enmascarado, con recolocación, descarte de brazos
+que se mueven y cierre de la vuelta con grafo de poses (rehace el volumen al
+corregir); con la persona sintética reproducida al ritmo real da 0,56° RMS de
+rotación (35,5° el seguidor SIFT anterior) y 11 ms de seguimiento por fotograma.
+**Reproducir como en directo** pasa una toma guardada o la persona sintética por
+ese mismo motor al ritmo de sus marcas de tiempo y la mide (también MCP
+`replay_live_capture`). **Refinar una toma** vuelve a procesar cualquier toma
 guardada sin abrir la cámara: separa al sujeto del suelo y del fondo, lo sigue con
 ICP con color de grueso a fino, cierra la vuelta completa con un grafo de poses,
 descarta en cada vista los brazos o manos que se movieron y exporta
 `refined.obj` con atlas, junto a una tabla nativo/refinado con las mismas
 máscaras. Con una persona sintética girando con los brazos en movimiento, el error
-de rotación baja de 32,4° RMS (seguimiento en directo) a 2,0°, y la superficie
-queda a 0,8 mm de mediana de la verdad (33 mm la nativa). El giro natural completo
+de rotación del refinado es 2,0° RMS, y la superficie queda a 0,8 mm de mediana
+de la verdad. El giro natural completo
 de una persona real **todavía no está validado** (prueba física en
 `PENDIENTES.md`) y no hay campo de deformación para cambios grandes de postura.
 Consulta [escáner en directo](docs/live-scanner.md) para los controles,

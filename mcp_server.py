@@ -113,6 +113,12 @@ def _open_live_scan_locked(mode: str, generation: str, subject: str, window: boo
         existing = _live_request()
     except OSError:
         existing = None
+    if existing is not None and existing.get("replay"):
+        # A replay holds the engine, not the sensor; a finished one gives way.
+        if existing.get("state") not in ("finished", "error"):
+            raise ValueError("Hay una reproducción en curso en el escáner; desconéctala antes de abrir la cámara")
+        runtime.stop("scanner")
+        existing = None
     if existing is not None:
         if (existing["mode"], existing["model"], existing["target"]) != (mode, generation, subject):
             raise ValueError("Hay otro escáner abierto; finaliza y cierra esa toma antes de cambiar de modo")
@@ -146,16 +152,25 @@ def control_live_scan(action: str, x: float = 0, y: float = 0) -> dict[str, Any]
     return _live_request(f"{action}?x={x}&y={y}", True)
 
 
+TAKE_PREFIXES = ("live-", "synthetic-")
+
+
+def _take_folders() -> list[Path]:
+    """Saved takes with archived frames: live-* from the scanner, synthetic-* with ground truth."""
+    folders = [p for prefix in TAKE_PREFIXES for p in CAPTURE_DIR.glob(prefix + "*")
+               if (p / "live.scan.json").is_file() and (p / "session.khr").is_file()]
+    return sorted(folders, key=lambda p: (p.name.startswith("live-"), p.name), reverse=True)
+
+
 def _live_capture(capture: str) -> Path:
-    """Resolve a captures/live-* folder by name; empty means the newest one with archived frames."""
+    """Resolve a captures/live-* (or synthetic-*) folder by name; empty means the newest live take."""
     if not capture:
-        folders = sorted((p for p in CAPTURE_DIR.glob("live-*") if (p / "live.scan.json").is_file()
-                          and (p / "session.khr").is_file()), key=lambda p: p.name, reverse=True)
+        folders = [p for p in _take_folders() if p.name.startswith("live-")] or _take_folders()
         if not folders:
             raise FileNotFoundError("No hay tomas del escáner en directo con fotogramas archivados")
         return folders[0]
-    if Path(capture).name != capture or not capture.startswith("live-"):
-        raise ValueError("Indica el nombre de una carpeta live-* de captures/")
+    if Path(capture).name != capture or not capture.startswith(TAKE_PREFIXES):
+        raise ValueError("Indica el nombre de una carpeta live-* o synthetic-* de captures/")
     folder = CAPTURE_DIR / capture
     if not (folder / "live.scan.json").is_file() or not (folder / "session.khr").is_file():
         raise FileNotFoundError("La toma no conserva session.khr y live.scan.json")
@@ -197,14 +212,18 @@ def _refine_summary(folder: Path) -> dict[str, Any]:
 
 @mcp.tool()
 def list_live_captures() -> list[dict[str, Any]]:
-    """List live scanner takes (captures/live-*) with archived frames, native outputs and refinement state."""
+    """List saved takes with archived frames and their refinement state.
+
+    live-* are live scanner takes; synthetic-* are generated turns with ground
+    truth (tests/turn_synthetic.py), usable for refine and replay alike.
+    """
     rows = []
-    for folder in sorted(CAPTURE_DIR.glob("live-*"), key=lambda p: p.name, reverse=True):
-        if not (folder / "live.scan.json").is_file() or not (folder / "session.khr").is_file():
-            continue
+    for folder in _take_folders():
         manifest = json.loads((folder / "live.scan.json").read_text(encoding="utf-8"))
         summary = _refine_summary(folder)
-        rows.append({"capture": folder.name, "model": manifest.get("model"), "mode": manifest.get("mode"),
+        rows.append({"capture": folder.name, "kind": "synthetic" if folder.name.startswith("synthetic-") else "live",
+                     "ground_truth": (folder / "ground_truth.json").is_file(),
+                     "model": manifest.get("model"), "mode": manifest.get("mode"),
                      "target": manifest.get("target"), "archived_frames": len(manifest.get("poses", [])),
                      "native_obj": (folder / "scan.obj").is_file(), "refine_state": summary["state"],
                      "refined_obj": (folder / "refined" / "refined.obj").is_file()})
@@ -248,6 +267,100 @@ def refine_live_scan(capture: str = "", texture: bool = True, radius_metres: flo
 def refine_status(capture: str = "") -> dict[str, Any]:
     """Progress of refine_live_scan and, when finished, native vs refined metrics and download paths."""
     return _refine_summary(_live_capture(capture))
+
+
+def _replay_folder(replay: str) -> Path:
+    if not replay:
+        folders = sorted((p for p in CAPTURE_DIR.glob("replay-*") if (p / "session.intrinsics.json").is_file()),
+                         key=lambda p: p.stat().st_mtime, reverse=True)
+        if not folders:
+            raise FileNotFoundError("Todavía no hay reproducciones como en directo")
+        return folders[0]
+    if Path(replay).name != replay or not replay.startswith("replay-"):
+        raise ValueError("Indica el nombre de una carpeta replay-* de captures/")
+    folder = CAPTURE_DIR / replay
+    if not folder.is_dir():
+        raise FileNotFoundError(replay)
+    return folder
+
+
+@mcp.tool()
+def replay_live_capture(capture: str = "", tracker: str = "icp", speed: float = 1.0) -> dict[str, Any]:
+    """Feed a saved take through the live scanner as if the sensor were streaming it, without a camera.
+
+    The native engine reads captures/<capture>/session.khr at the pace of its
+    own timestamps (speed 1; 0.25-4 scales it, 0 processes every frame at
+    once) and drops frames when processing falls behind, as the sensor would.
+    tracker: icp = coloured ICP on the masked subject with relocalisation and
+    loop closure (current live tracker); sift = the earlier RGB-feature chain,
+    for comparison. Watch it on the scanner page or poll live_scan_status; at
+    the end it exports mesh and atlas into captures/replay-*/ and measures the
+    replay (see replay_score). Empty capture = newest live take.
+    """
+    if tracker not in ("icp", "sift"):
+        raise ValueError("tracker: icp o sift")
+    if not (speed == 0 or 0.25 <= speed <= 4):
+        raise ValueError("speed: 0 (sin pausa) o entre 0,25 y 4")
+    folder = _live_capture(capture)
+    with runtime.lifecycle():
+        try:
+            existing = _live_request()
+        except OSError:
+            existing = None
+        if existing is not None:
+            idle = existing.get("state") in ("finished", "error", "closed") or (
+                existing.get("state") == "ready" and not existing.get("frames_integrated"))
+            if not idle:
+                raise ValueError("Hay una toma en curso en el escáner; finalízala o desconéctala antes de reproducir otra")
+            runtime.stop("scanner")
+        runtime.stop("camera")
+        name = f"replay-{datetime.now():%Y%m%d-%H%M%S}-{folder.name}"
+        result = runtime.launch("scanner", lambda port: [sys.executable, str(ROOT / "scanner_worker.py"), "replay",
+                                str(folder / "session.khr"), tracker, repr(float(speed)), str(port), str(CAPTURE_DIR / name)],
+                                "api/scan/status", _exe())
+    return {**result, "replay": name, "capture": folder.name, "tracker": tracker, "speed": speed}
+
+
+def _replay_row(folder: Path) -> dict[str, Any]:
+    row: dict[str, Any] = {"replay": folder.name, "state": "running"}
+    journal, score = folder / "live.scan.json", folder / "replay-score.json"
+    if journal.is_file():
+        manifest = json.loads(journal.read_text(encoding="utf-8"))
+        row.update(state="exported", source=Path(manifest.get("replay_source") or "").name,
+                   tracker=manifest.get("tracker"), interrupted=bool(manifest.get("interrupted")),
+                   latency=manifest.get("latency"), tracking=manifest.get("tracking"))
+    if score.is_file():
+        data = json.loads(score.read_text(encoding="utf-8"))
+        row["state"] = "scored"
+        row.update({k: data.get(k) for k in ("synthetic", "control_pairs", "reference_mesh", "mesh", "frames_tracked",
+                                             "frames_archived", "subject_frames", "tracked_without_subject", "replay_feed")})
+    elif (folder / "score.log").is_file() and journal.is_file():
+        row["score_log"] = (folder / "score.log").read_text(encoding="utf-8", errors="replace")[-1500:]
+    row["files"] = {name: f"/api/workspace/file/{folder.name}/{name}"
+                    for name in ("scan.obj", "scan.mtl", "scan-albedo.png", "scan.ply", "live.scan.json", "replay-score.json")
+                    if (folder / name).is_file()}
+    return row
+
+
+@mcp.tool()
+def list_live_replays() -> list[dict[str, Any]]:
+    """List replays as in live (captures/replay-*), newest first, with source take, tracker and scoring state."""
+    folders = sorted(CAPTURE_DIR.glob("replay-*"), key=lambda p: p.stat().st_mtime, reverse=True)
+    return [{k: v for k, v in _replay_row(f).items() if k in ("replay", "state", "source", "tracker", "interrupted")}
+            for f in folders if f.is_dir()]
+
+
+@mcp.tool()
+def replay_score(replay: str = "") -> dict[str, Any]:
+    """Measurements of a live replay (newest when empty).
+
+    Tracking counts (tracked, relocalised, lost, loop closures, volume
+    rebuilds), per-frame latency against the 30 fps budget, rotation error
+    against ground truth (synthetic takes), pose error and overlap on the
+    offline refine's held-out control pairs next to the recorded live and the
+    refined poses (recorded takes), and the live mesh's depth residual.
+    """
+    return _replay_row(_replay_folder(replay))
 
 
 @mcp.tool()

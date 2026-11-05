@@ -29,10 +29,22 @@ namespace KinectHoard.App
                 var scanner = new FusionScanner(ParseModel(args[2]), args[1], args[3], Path.Combine(ScannerExport.Root(), "captures", "live-" + DateTime.Now.ToString("yyyyMMdd-HHmmss-fff")));
                 return CameraStreamServer.Run(args.Length == 5 ? int.Parse(args[4]) : 64320, StreamKind.ColorDepth, 0, scanner.Model, true, scanner);
             }
-            if (args.Length == 6 && args[0] == "--scanner-replay")
+            if (args.Length >= 6 && args.Length <= 8 && args[0] == "--scanner-replay")
             {
-                try { return FusionScanner.Replay(args[1], ParseModel(args[2]), args[3], args[4], args[5] == "cpu"); }
+                // SESSION MODEL MODE DIRECTORY cpu|amp [icp|sift] [speed: 1 = recorded pace, 0 = every frame at once]
+                try { return FusionScanner.Replay(args[1], ParseModel(args[2]), args[3], args[4], args[5] == "cpu",
+                    args.Length >= 7 ? args[6] : "icp", args.Length == 8 ? double.Parse(args[7], System.Globalization.CultureInfo.InvariantCulture) : 1); }
                 catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
+            }
+            if ((args.Length == 5 || args.Length == 6) && args[0] == "--scanner-replay-server")
+            {
+                // SESSION TRACKER SPEED PORT [DIRECTORY]: a recorded take through the live
+                // engine and its HTTP API, paced by its own timestamps.
+                var source = new ReplaySource(args[1], double.Parse(args[3], System.Globalization.CultureInfo.InvariantCulture));
+                string directory = args.Length == 6 ? args[5] : Path.Combine(ScannerExport.Root(), "captures",
+                    "replay-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + "-" + Path.GetFileName(source.Source));
+                var scanner = new FusionScanner(source.Model, source.Mode, source.Target, directory, false, source.Mirrored, args[2]) { ReplayFeed = source };
+                return CameraStreamServer.Run(int.Parse(args[4]), StreamKind.ColorDepth, 0, scanner.Model, true, scanner, source);
             }
             if ((args.Length == 4 || args.Length == 5) && args[0] == "--scanner")
             {

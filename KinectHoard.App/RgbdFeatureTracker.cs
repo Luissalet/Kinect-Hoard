@@ -175,6 +175,16 @@ namespace KinectHoard.App
             }
         }
 
+        // Keyframe anchor chosen by the coloured ICP tracker: it becomes both
+        // the previous view and a saved view for relocalisation proposals.
+        internal void Anchor(View view, FusionMatrix pose)
+        {
+            if (previous != null && !anchors.Contains(previous)) previous.Dispose();
+            view.Pose = pose; previous = view; accepted++;
+            anchors.Add(view);
+            if (anchors.Count > 40) { anchors[1].Dispose(); anchors.RemoveAt(1); }
+        }
+
         public void Dispose()
         {
             if (previous != null && !anchors.Contains(previous)) previous.Dispose();

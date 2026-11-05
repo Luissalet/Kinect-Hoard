@@ -245,6 +245,36 @@ def refine_state(capture: str = ""):
         raise HTTPException(404, str(exc)) from exc
 
 
+class ReplayCommand(BaseModel):
+    capture: str = ""
+    tracker: str = "icp"
+    speed: float = 1.0
+
+
+@app.post("/api/scanner/replay")
+async def replay(command: ReplayCommand):
+    global owned_engine
+    try:
+        result = await asyncio.to_thread(toolkit.replay_live_capture, command.capture, command.tracker, command.speed)
+    except (ValueError, RuntimeError, OSError, TimeoutError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+    owned_engine = True
+    return result
+
+
+@app.get("/api/scanner/replays")
+def replays():
+    return toolkit.list_live_replays()
+
+
+@app.get("/api/scanner/replay-score")
+def replay_measurements(replay: str = ""):
+    try:
+        return toolkit.replay_score(replay)
+    except (ValueError, OSError) as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
 @app.get("/api/scanner/{view}.png")
 def preview(view: str):
     if view not in ("preview", "surface"):

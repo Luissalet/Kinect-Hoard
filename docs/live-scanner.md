@@ -38,29 +38,116 @@ el atlas. Cada toma usa una carpeta nueva bajo `captures/`.
 
 ## Motor y límites
 
-Microsoft.Kinect.Fusion.x64 2.0.1410.19000 proporciona el seguimiento contra el
-volumen, integración de profundidad/color, raycasting y CameraPoseFinder.
-Correspondencias SIFT, RANSAC 3D y ajuste rígido SVD proponen poses verificadas
-con profundidad de ambos fotogramas y vistas anteriores. Los fotogramas rechazados no se integran;
-una recuperación requiere confirmación. El archivo de RGB usa otra cola con
-capacidad limitada para desacoplar compresión y reconstrucción.
+Microsoft.Kinect.Fusion.x64 2.0.1410.19000 proporciona la integración de
+profundidad/color, el raycasting de la vista y la malla. La pose la calcula el seguimiento de ICP con color descrito abajo; las
+correspondencias SIFT con RANSAC 3D quedan como propuesta de recolocación (y como
+seguimiento anterior completo, `tracker: sift`, para comparar). Los fotogramas
+rechazados no se integran. El archivo de RGB usa otra cola con capacidad limitada
+para desacoplar compresión y reconstrucción, y las vistas PNG se codifican fuera
+del hilo de captura.
 
-Persona con One emplea índices y TrackingId del SDK. En 360 y Objeto se usa una
-componente continua de profundidad que sigue su centro proyectado. Puede incluir
-una mesa o silla en contacto: todavía no equivale a segmentación semántica de
-objetos. El volumen inicial mide 1,5 m de lado y usa vóxeles de 3,90625 mm.
+Persona con One emplea índices y TrackingId del SDK. En 360 y Objeto, el
+seguimiento de ICP con color separa el sujeto en toda la imagen de profundidad
+(la componente que pulses o la mayor cerca del centro, como el refinado); con
+`tracker: sift` se usa la componente continua de profundidad que sigue su centro
+proyectado. Puede incluir una mesa o silla en contacto: todavía no equivale a
+segmentación semántica de objetos. El volumen inicial mide 1,5 m de lado y usa vóxeles de 3,90625 mm.
 Necesita runtime Kinect v2 y GPU compatible con Fusion AMP.
 
 El seguimiento en directo es rígido. La compensación de postura, cuello, ropa y
 objetos deformables con un campo de deformación **no está implementada**; el
-refinado sin cámara (abajo) descarta por vista el movimiento pequeño de brazos y
-manos. El giro natural completo de una persona sigue pendiente de la prueba
+seguimiento y el refinado descartan por vista el movimiento de brazos y manos. El giro natural completo de una persona sigue pendiente de la prueba
 física de `PENDIENTES.md`. Vistas RGB y casos sintéticos no
 acreditan por sí solos calidad de busto u objeto físico. Las superficies con
 pocas referencias de forma/color necesitan validación adicional.
 
 La [investigación de motores](scanner-research.md) recoge alternativas y sus
 límites, incluidas reconstrucción no rígida y segmentación aprendida.
+
+## Seguimiento en directo (ICP con color)
+
+Desde el 05-11-2026 el escáner sigue al sujeto con el método del refinado, hecho
+incremental y dentro del presupuesto de cada fotograma (`ColorIcpTracker.cs`,
+`LiveIcpTracker.cs`, `SubjectGate.cs`):
+
+1. **Sujeto:** la misma máscara que el refinado, fotograma a fotograma: banda de
+   profundidad, plano del suelo (buscado una vez), componentes separadas en los
+   saltos de profundidad, cilindro de 0,5 m alrededor del eje del sujeto y prueba
+   de continuidad. Una vista sin sujeto (fuera de imagen, máscara en la pared) no
+   se sigue ni se integra. Con One y Persona parte de la máscara corporal del SDK;
+   en Objeto, de toda la imagen y del punto que pulses.
+2. **ICP con color contra vistas clave:** punto-a-plano más un término de
+   intensidad (gradiente de la vista clave) con núcleo de Tukey, de grueso a fino
+   (5 cm, 2,5 cm, 1,25 cm), asociación proyectiva a media resolución contra las 4
+   últimas vistas clave (una cada 6° de giro), predicción de velocidad constante
+   por unidad de tiempo y una prioridad suave sobre el ritmo de giro cuando el
+   intervalo es corto (sensor en directo).
+3. **Brazos y manos:** un punto que las vistas clave recientes no ven igual (más de
+   1 cm de diferencia, o delante de una superficie que otra vista vio detrás) no
+   tira de la pose ni se integra.
+4. **Recolocación:** si falla, giros de ±10–40° del sujeto alrededor de su eje
+   vertical (también recentrado), después una propuesta SIFT y un barrido sobre
+   las vistas clave ordenado por solape × coincidencia de cromaticidad. Tras una
+   vista seguida no admite más de 30–45° respecto a la predicción (sin vuelta de
+   180° de un torso simétrico).
+5. **Cierre de la vuelta en directo:** al volver a ver un lado tras más de 150° de
+   giro se registra la vista clave contra la antigua; un grafo de poses (Gauss-Newton,
+   poda de aristas incoherentes) se resuelve en segundo plano y, si mueve las
+   poses, el volumen se rehace con las vistas clave corregidas: la superficie en
+   pantalla no se duplica al volver al frente.
+
+Se probó además descartar al integrar los píxeles a más de 1,5 cm del volumen
+(la segunda pasada del refinado): con la persona sintética abría huecos (malla en
+1562 piezas frente a 675, completitud a 1 cm del 77 % frente al 82 %) y costaba
+4–9 ms por fotograma, así que no se usa en directo.
+
+`live.scan.json` guarda además `trajectory` (todas las vistas seguidas, con poses
+corregidas por el grafo), `tracking` (seguidas, recolocadas, perdidas, cierres,
+reconstrucciones del volumen…) y `latency` (milisegundos por fotograma frente a los
+33 ms de 30 fps). El seguimiento anterior por rasgos SIFT sigue disponible como
+`tracker: sift` para comparar.
+
+## Reproducir como en directo
+
+Sin sensor, **Reproducir como en directo** (debajo de *Refinar una toma*) lleva
+una toma guardada (`captures/live-*` o la persona sintética `synthetic-*`) por el
+mismo `FusionScanner.Process` que la cámara, al ritmo de sus marcas de tiempo:
+si el proceso se retrasa, se descartan los fotogramas que el sensor habría
+sustituido. Se ve igual que una toma real (cámara con máscara y superficie que
+crece, que puedes girar) y al terminar mide la reproducción y exporta malla y
+atlas en `captures/replay-*`. Elige seguimiento (ICP con color o rasgos SIFT) y
+ritmo (tiempo de la toma, mitad, doble o sin pausa).
+
+`replay_score.py` escribe `replay-score.json`: con la persona sintética, error de
+rotación frente a la verdad y precisión/completitud de la superficie; con una
+toma refinada, error de pose y solape en sus 35 pares de control para la
+reproducción, lo grabado en directo y el refinado; siempre, residuo
+malla–profundidad con las máscaras del refinado y latencia por fotograma. La
+interfaz lo muestra como tabla (reproducción, grabado en directo, refinado).
+
+### Resultados (05-11-2026, al ritmo de la toma, AMP, sin atlas)
+
+| Medida | Rasgos SIFT (antes) | ICP con color (ahora) | Refinado sin cámara |
+| --- | --- | --- | --- |
+| Persona sintética: rotación RMS / máx. / final | 35,5° / 67,7° / 8,5° | 0,56° / 2,19° / 0,55° | 2,0° / 7,7° / 1,6° |
+| Persona sintética: superficie mediana / completitud a 1 cm | 21,0 mm / 39 % | 1,65 mm / 82 % | 0,84 mm / 82 % |
+| Persona sintética: residuo malla–profundidad | 8,5 mm | 2,1 mm | — |
+| Toma real 19-10: vistas del sujeto seguidas | 8 de 109 (y 24 sin sujeto) | 108 de 109 (0 sin sujeto) | 102 de 109 |
+| Toma real: error de pose en 35 pares (mediana / p90) | 32 pares sin pose | 3,1° / 15,9° | 1,1° / 11,0° |
+| Toma real: solape a 1 cm (mediana) | — | 77 % | 87 % |
+| Toma real: residuo malla–profundidad | 3,2 mm (8 vistas) | 4,4 mm | 3,3 mm |
+| Silla 360: residuo malla–profundidad | 1,2 mm | 0,97 mm | 0,87 mm |
+| Seguimiento por fotograma (mediana / p95) | 40 / 56 ms | 11 / 16 ms | — |
+| Proceso completo por fotograma, persona sintética (mediana / p95) | 55 / 96 ms | 20 / 55 ms | — |
+
+En la toma real lo grabado en directo con el seguidor anterior daba 11,3° / 23,1°
+de error en los pares de control, 36 % de solape y una malla a 820 mm de su
+profundidad (integraba las 187 vistas sin sujeto). La persona sintética se
+reprodujo a 10 fps reales; en este equipo, compartido con otras cargas, el 64 %
+de los fotogramas entró en 33 ms y el p95 los supera (picos al rehacer el volumen
+tras un cierre). La toma real del 19-10 se grabó a 2,5 Hz y la silla, a 640×480,
+gasta 18 ms en el raycast de la vista. Prueba automática: `tests/live-replay.py`
+(persona sintética: RMS < 5°, final < 4°, al menos un cierre, residuo < 6 mm).
 
 ## Refinado sin cámara
 
@@ -150,8 +237,19 @@ MCP: `start_live_scan(mode, generation, subject)`, `live_scan_status()` y
 `control_live_scan(action, x, y)`. La apertura queda en vista previa, sin capturar.
 `exporting` debe alcanzar `finished` antes de considerar terminado el OBJ.
 
-La utilidad nativa `--scanner-replay SESION MODELO MODO DIRECTORIO cpu|amp` prueba
-la misma reconstrucción con capturas existentes, sin accionar el sensor.
+La utilidad nativa `--scanner-replay SESION MODELO MODO DIRECTORIO cpu|amp [icp|sift] [ritmo]`
+prueba la misma reconstrucción con capturas existentes, sin accionar el sensor
+(ritmo 1 = marcas de tiempo de la toma, 0 = sin pausa; mide al terminar).
+`--scanner-replay-server SESION icp|sift RITMO PUERTO [DIRECTORIO]` abre el mismo
+motor con su API HTTP: es lo que usan el botón y la herramienta MCP.
+
+Reproducción: `replay_live_capture(capture, tracker, speed)`, `list_live_replays()`
+y `replay_score(replay)` en MCP y en `/api/agent/*`; la página usa
+`POST /api/scanner/replay`, `GET /api/scanner/replays` y
+`GET /api/scanner/replay-score?replay=replay-...`. Durante la reproducción,
+`live_scan_status()` añade `replay` (fotogramas entregados, descartados por
+retraso), `tracking` y `latency`. Una reproducción terminada cede el motor a
+**Conectar cámara**; una en curso no se interrumpe sin **Desconectar**.
 `quality_scan.py --texture-live DIRECTORIO` reintenta solo el atlas de una toma
 que ya conserva malla y poses.
 
