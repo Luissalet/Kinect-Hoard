@@ -4,6 +4,8 @@ Estudio local para explorar, depurar y reutilizar capacidades Kinect. Detecta Ki
 
 ## Ejecutar
 
+Para **Captura de movimiento** con webcams o vídeos, ejecuta `setup-mocap.ps1` y abre el modo desde el estudio. Una cámara estima la pose 3D. Con varias, calibra las vistas con un tablero ChArUco o con los puntos del cuerpo. El resultado se puede exportar a BVH, GLB animado, JSON y CSV. La prueba sintética de dos cámaras verifica la calibración, los formatos y su importación en Blender.
+
 Desde **Hoard Hub**, abre **Kinect Hoard**. Su interfaz usa el tema compartido de
 la familia, el acceso común a Faustus y el mismo catálogo de herramientas que MCP.
 Arranca bajo demanda: abrir la interfaz no enciende el sensor. La portada ofrece
