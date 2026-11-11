@@ -34,6 +34,7 @@ en su armature y puede insertar keyframes. La salida limpia está en `/camera-ou
 | Herramienta | Resultado |
 | --- | --- |
 | `list_capabilities(generation)` | Catálogo con estado real de One o 360 |
+| `skills_list()` / `skill_read(slug)` | Procedimientos de la biblioteca de skills de la familia que este trabajo necesita (los elige el manifiesto y la pestaña Skills del hub) |
 | `get_capability(capability_id)` | Datos, muestras del Toolkit, rutas de código y documentación |
 | `read_hoard_source(relative_path)` | Código del catálogo y todos los Markdown de `docs/`; rechaza rutas ajenas al proyecto |
 | `sensor_status()` | Detección USB y backend sin iniciar un flujo |
