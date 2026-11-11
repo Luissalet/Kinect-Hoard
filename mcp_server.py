@@ -1258,6 +1258,34 @@ def capabilities_resource() -> str:
     return CATALOG.read_text(encoding="utf-8")
 
 
+SKILLS_DIR = CAPTURE_DIR / "skills"      # procedures from the family's skill library, copied here by the hub
+
+
+def _skills() -> list[dict[str, Any]]:
+    try:
+        rows = json.loads((SKILLS_DIR / "index.json").read_text(encoding="utf-8")).get("skills", [])
+    except (OSError, ValueError, AttributeError):
+        return []
+    return [row for row in rows if isinstance(row, dict) and isinstance(row.get("slug"), str)]
+
+
+@mcp.tool()
+def skills_list() -> list[dict[str, Any]]:
+    """The skills this app carries: procedures from the family's skill library for the work done here. Read the one that fits with skill_read before starting."""
+    return [{key: row.get(key) for key in ("slug", "name", "description", "version", "files")} for row in _skills()]
+
+
+@mcp.tool()
+def skill_read(slug: str) -> dict[str, Any]:
+    """One of this app's skills in full: the procedure to follow, its pitfalls and how to verify the result."""
+    wanted = slug.strip().lower().removeprefix("skill-")
+    row = next((item for item in _skills() if item["slug"] == wanted), None)
+    if row is None:
+        raise ValueError(f"No hay ninguna skill llamada {wanted!r}; skills_list dice cuales hay")
+    return {"slug": row["slug"], "name": row.get("name") or row["slug"], "version": row.get("version") or "",
+            "text": (SKILLS_DIR / row["slug"] / "SKILL.md").read_text(encoding="utf-8")}
+
+
 @mcp.resource("kinect-hoard://toolkit-map")
 def toolkit_map_resource() -> str:
     """Mapping from the original Kinect Developer Toolkit examples to Hoard."""
