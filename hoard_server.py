@@ -4,6 +4,7 @@ import ast
 import asyncio
 import inspect
 import json
+import subprocess
 import urllib.request
 import concurrent.futures
 import uuid
@@ -11,7 +12,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import get_type_hints
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, create_model
 from hoard_link import family
@@ -298,6 +299,143 @@ def download(artifact: str):
     if not path.is_file():
         raise HTTPException(404)
     return FileResponse(path, filename=artifact)
+
+
+# Motion capture without Kinect: the page calls the same functions as MCP, plus
+# a raw-body video upload and a camera snapshot that returns the image itself.
+@app.get("/mocap")
+def mocap_page():
+    return FileResponse(ROOT / "ui" / "mocap.html")
+
+
+def _mocap(function, *args, **kwargs):
+    try:
+        return function(*args, **kwargs)
+    except FileNotFoundError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except (RuntimeError, OSError, subprocess.TimeoutExpired) as exc:
+        raise HTTPException(503, str(exc)) from exc
+
+
+@app.get("/api/mocap/cameras")
+def mocap_cameras():
+    return _mocap(toolkit.mocap_cameras)
+
+
+@app.get("/api/mocap/cameras/{index}/snapshot.jpg")
+def mocap_snapshot(index: int):
+    result = _mocap(toolkit.mocap_snapshot, index)
+    data = Path(result["path"]).read_bytes()
+    Path(result["path"]).unlink(missing_ok=True)
+    return Response(data, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
+
+
+class MocapBoard(BaseModel):
+    squares_x: int = 5
+    squares_y: int = 7
+    square_mm: float = 35.0
+    marker_mm: float = 26.0
+
+
+@app.post("/api/mocap/board")
+def mocap_board(body: MocapBoard):
+    return _mocap(toolkit.mocap_board, **body.model_dump())
+
+
+class MocapRecord(BaseModel):
+    cameras: list[int] = [0]
+    seconds: float = 10
+    fps: int = 30
+    purpose: str = "motion"
+    take: str = ""
+    width: int = 1280
+    height: int = 720
+
+
+@app.post("/api/mocap/record")
+def mocap_record(body: MocapRecord):
+    return _mocap(toolkit.mocap_record, **body.model_dump())
+
+
+class MocapCalibrate(BaseModel):
+    take: str = ""
+    method: str = "charuco"
+    square_mm: float = 0
+    marker_mm: float = 0
+    subject_height_m: float = 1.70
+    fov_degrees: float = 60.0
+    from_take: str = ""
+
+
+@app.post("/api/mocap/calibrate")
+def mocap_calibrate(body: MocapCalibrate):
+    return _mocap(toolkit.mocap_calibrate, **body.model_dump())
+
+
+class MocapProcess(BaseModel):
+    take: str = ""
+    videos: list[str] = []
+    model: str = "full"
+    smoothing: str = "butterworth"
+    cutoff_hz: float = 6.0
+    subject_height_m: float = 1.70
+    fov_degrees: float = 60.0
+    auto_calibrate: bool = True
+    check_video: bool = True
+
+
+@app.post("/api/mocap/process")
+def mocap_process(body: MocapProcess):
+    return _mocap(toolkit.mocap_process, **body.model_dump())
+
+
+@app.get("/api/mocap/status")
+def mocap_status(take: str = ""):
+    return _mocap(toolkit.mocap_status, take)
+
+
+@app.get("/api/mocap/takes")
+def mocap_takes():
+    return toolkit.mocap_list()
+
+
+class MocapExport(BaseModel):
+    take: str = ""
+    destination: str = "files"
+    target_path: str = ""
+    target_id: int = 0
+
+
+@app.post("/api/mocap/export")
+def mocap_export(body: MocapExport):
+    return _mocap(toolkit.mocap_export, **body.model_dump())
+
+
+@app.post("/api/mocap/upload")
+async def mocap_upload(request: Request, filename: str, camera: int = 0, take: str = "", purpose: str = "motion"):
+    """Store one uploaded video as camera N of a take (request body = the file). Empty take = new take."""
+    suffix = Path(filename).suffix.lower()
+    if suffix not in (".avi", ".mp4", ".mov", ".mkv", ".webm", ".m4v", ".wmv"):
+        raise HTTPException(400, "Formato de vídeo no admitido")
+    if not 0 <= camera <= 3 or purpose not in ("motion", "calibration"):
+        raise HTTPException(400, "camera 0-3 y purpose motion o calibration")
+    folder = _mocap(toolkit._mocap_take, take, True)
+    target = folder / ("calib" if purpose == "calibration" else "videos")
+    target.mkdir(exist_ok=True)
+    for old in target.glob(f"cam{camera}.*"):
+        old.unlink()
+    path = target / f"cam{camera}{suffix}"
+    written = 0
+    with path.open("wb") as fh:
+        async for chunk in request.stream():
+            fh.write(chunk)
+            written += len(chunk)
+    if written == 0:
+        path.unlink(missing_ok=True)
+        raise HTTPException(400, "El vídeo llegó vacío")
+    return {"take": folder.name, "camera": camera, "purpose": purpose, "bytes": written, "file": path.name}
 
 
 # Publish the very same functions and typed arguments as stdio MCP. No second
