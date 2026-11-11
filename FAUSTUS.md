@@ -76,3 +76,7 @@ Las imágenes permanecen locales; la UI no envía píxeles al copilot automátic
 ## Icono de la familia (2026-11-02)
 
 Dragon turquesa con sensor y figura corporal dorados. Cabecera, escaner y favicon usan app-icon.svg (PNG incrustado); el Hub usa app-icon.png y el ejecutable usa app-icon.ico con seis resoluciones. Arte final con ala corregida, sin cambios de funciones ni inicio de sensores.
+
+## Skills
+
+The `skills` block of `faustus-plugin.json` names the procedures of the family's skill library that fit this app's work: `depth-camera-capture`, `web-3d-asset-pipeline`. The hub's Skills tab shows and changes them. This app does not hand them to connecting agents yet.
