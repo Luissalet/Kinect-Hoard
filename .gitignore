@@ -21,3 +21,4 @@ captura-*.wav
 __pycache__/
 *.pyc
 .impeccable/review944/
+.venv-mocap/

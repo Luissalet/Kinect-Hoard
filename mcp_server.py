@@ -943,6 +943,315 @@ def session_info(filename: str) -> dict[str, Any]:
         output.unlink(missing_ok=True)
 
 
+MOCAP_PREFIX = "mocap-"
+MOCAP_JOBS = {"record": "record-progress.json", "calibrate": "calibration-progress.json", "process": "progress.json"}
+MOCAP_FILES = ("skeleton.json", "skeleton.csv", "motion.bvh", "motion.glb", "check.mp4", "report.json",
+               "calibration.json")
+
+
+def _mocap_command() -> list[str]:
+    for python in (ROOT / ".venv-mocap" / "Scripts" / "python.exe", ROOT / ".venv-mocap" / "bin" / "python"):
+        if python.is_file():
+            return [str(python), str(ROOT / "mocap.py")]
+    raise RuntimeError("Falta el entorno de captura de movimiento: ejecuta setup-mocap.ps1 una vez")
+
+
+def _mocap_takes() -> list[Path]:
+    folders = [p for p in CAPTURE_DIR.glob(MOCAP_PREFIX + "*") if p.is_dir()]
+    return sorted(folders, key=lambda p: p.stat().st_mtime, reverse=True)
+
+
+def _mocap_take(take: str, create: bool = False) -> Path:
+    """captures/mocap-* by name; empty = newest (or a new one when create)."""
+    if not take:
+        if create:
+            folder = CAPTURE_DIR / f"{MOCAP_PREFIX}{datetime.now():%Y%m%d-%H%M%S}"
+            folder.mkdir(parents=True, exist_ok=True)
+            return folder
+        takes = _mocap_takes()
+        if not takes:
+            raise FileNotFoundError("Todavía no hay tomas de captura de movimiento")
+        return takes[0]
+    if Path(take).name != take or not take.startswith(MOCAP_PREFIX) or take in (".", ".."):
+        raise ValueError("Indica el nombre de una carpeta mocap-* de captures/")
+    folder = CAPTURE_DIR / take
+    if not folder.is_dir():
+        if not create:
+            raise FileNotFoundError(take)
+        folder.mkdir(parents=True)
+    return folder
+
+
+def _mocap_job_state(folder: Path, kind: str) -> dict[str, Any]:
+    progress = folder / MOCAP_JOBS[kind]
+    if not progress.is_file():
+        return {"state": "not_started"}
+    try:
+        state = json.loads(progress.read_text(encoding="utf-8"))
+    except ValueError:
+        return {"state": "running"}
+    job = folder / f"{kind}-job.json"
+    if state.get("state") == "running" and job.is_file():
+        pid = json.loads(job.read_text(encoding="utf-8")).get("pid")
+        if os.name == "nt":
+            alive = str(pid) in subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/NH"], capture_output=True,
+                                               text=True, creationflags=subprocess.CREATE_NO_WINDOW).stdout
+        else:
+            alive = Path(f"/proc/{pid}").exists()
+        if not alive:
+            log = folder / f"{kind}.log"
+            tail = log.read_text(encoding="utf-8", errors="replace")[-600:] if log.is_file() else ""
+            state.update(state="error", detail="El proceso terminó sin informe", log=tail)
+    state.pop("updated", None)
+    return state
+
+
+def _mocap_start(folder: Path, kind: str, arguments: list[str]) -> dict[str, Any]:
+    if any(_mocap_job_state(folder, other)["state"] == "running" for other in MOCAP_JOBS):
+        raise ValueError("Esta toma ya tiene un trabajo en curso; espera a que termine")
+    command = [*_mocap_command(), kind, str(folder), *arguments]
+    (folder / MOCAP_JOBS[kind]).write_text(json.dumps({"state": "running", "stage": "starting", "progress": 0}),
+                                           encoding="utf-8")
+    with (folder / f"{kind}.log").open("wb") as log:
+        process = subprocess.Popen(command, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT,
+                                   creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    (folder / f"{kind}-job.json").write_text(json.dumps({"pid": process.pid, "command": command}), encoding="utf-8")
+    return {"take": folder.name, "job": kind, "state": "running", "pid": process.pid}
+
+
+def _mocap_videos(folder: Path) -> list[str]:
+    extensions = (".avi", ".mp4", ".mov", ".mkv", ".webm", ".m4v", ".wmv")
+    return sorted(p.name for p in folder.iterdir() if p.is_file() and p.suffix.lower() in extensions) \
+        if folder.is_dir() else []
+
+
+def _mocap_url(folder: Path, name: str) -> str:
+    return f"/api/workspace/file/{folder.name}/{name}"
+
+
+def _mocap_summary(folder: Path) -> dict[str, Any]:
+    result: dict[str, Any] = {"take": folder.name, "videos": _mocap_videos(folder / "videos"),
+                              "calibration_videos": _mocap_videos(folder / "calib"),
+                              "jobs": {kind: _mocap_job_state(folder, kind) for kind in MOCAP_JOBS}}
+    calibration = folder / "calibration.json"
+    if calibration.is_file():
+        data = json.loads(calibration.read_text(encoding="utf-8"))
+        result["calibration"] = {"method": data.get("method"), "cameras": len(data.get("cameras", [])),
+                                 "reprojection_px": data.get("reprojection_rms_px", data.get("reprojection_px")),
+                                 "copied_from": data.get("copied_from")}
+    report = folder / "report.json"
+    if report.is_file():
+        data = json.loads(report.read_text(encoding="utf-8"))
+        result["report"] = {k: data.get(k) for k in (
+            "method", "cameras", "frames", "fps", "detector", "detection_rate", "ms_per_frame", "reprojection_px_median",
+            "reprojection_px_p90", "core_points_valid", "gap_samples_filled", "filter", "cutoff_hz", "bvh", "glb",
+            "check_video", "seconds", "intrinsics")}
+    result["files"] = {name: _mocap_url(folder, name) for name in MOCAP_FILES if (folder / name).is_file()}
+    return result
+
+
+@mcp.tool()
+def mocap_cameras() -> list[dict[str, Any]]:
+    """List the webcams connected to this PC (index, name, resolution) for motion capture without Kinect.
+
+    Opens each camera for a moment to check it delivers images; a camera in use by
+    another program does not appear.
+    """
+    result = subprocess.run([*_mocap_command(), "cameras"], capture_output=True, text=True, timeout=90,
+                            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    if result.returncode != 0:
+        raise RuntimeError(f"No se pudieron listar las cámaras: {result.stderr[-400:]}")
+    return json.loads(result.stdout.strip().splitlines()[-1])
+
+
+@mcp.tool()
+def mocap_snapshot(camera: int = 0) -> dict[str, Any]:
+    """Save one JPEG from a webcam into captures/mocap-snapshots/ to check framing. Returns the path, not pixels."""
+    if not 0 <= camera <= 9:
+        raise ValueError("camera debe estar entre 0 y 9")
+    folder = CAPTURE_DIR / "mocap-snapshots"
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / f"camera{camera}-{datetime.now():%Y%m%d-%H%M%S-%f}.jpg"
+    result = subprocess.run([*_mocap_command(), "snapshot", str(camera), str(path)], capture_output=True, text=True,
+                            timeout=40, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    if result.returncode != 0 or not path.is_file():
+        raise RuntimeError(f"La cámara {camera} no entregó imagen: {result.stderr[-300:]}")
+    return {"camera": camera, "path": str(path), "url": f"/api/workspace/file/mocap-snapshots/{path.name}"}
+
+
+@mcp.tool()
+def mocap_board(squares_x: int = 5, squares_y: int = 7, square_mm: float = 35.0, marker_mm: float = 26.0) -> dict[str, Any]:
+    """Generate a printable ChArUco board (A4 PDF at true scale) for calibrating 2-4 webcams.
+
+    Print at 100 % and measure one square; pass the measured size to mocap_calibrate
+    when it differs. The board's definition is saved beside the PDF.
+    """
+    folder = CAPTURE_DIR / "charuco"
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / f"charuco-{squares_x}x{squares_y}-{square_mm:g}mm.pdf"
+    result = subprocess.run([*_mocap_command(), "board", str(path), "--squares-x", str(squares_x), "--squares-y",
+                             str(squares_y), "--square-mm", str(square_mm), "--marker-mm", str(marker_mm)],
+                            capture_output=True, text=True, timeout=60,
+                            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    if result.returncode != 0 or not path.is_file():
+        raise ValueError(result.stderr.strip().splitlines()[-1] if result.stderr.strip() else "No se pudo crear el PDF")
+    return {"pdf": str(path), "url": f"/api/workspace/file/charuco/{path.name}",
+            "board": {"squares_x": squares_x, "squares_y": squares_y, "square_mm": square_mm, "marker_mm": marker_mm,
+                      "dictionary": "DICT_4X4_50"}}
+
+
+@mcp.tool()
+def mocap_record(cameras: list[int] = [0], seconds: float = 10, fps: int = 30, purpose: str = "motion",
+                 take: str = "", width: int = 1280, height: int = 720) -> dict[str, Any]:
+    """Record 1-4 webcams at once into a motion-capture take (captures/mocap-*), in the background.
+
+    purpose motion records the movement (videos/); calibration records the ChArUco
+    board (calib/). Every frame keeps a shared-clock timestamp for syncing. Empty
+    take = new take. Poll mocap_status; then mocap_calibrate (2+ cameras) and
+    mocap_process.
+    """
+    if not 1 <= len(cameras) <= 4 or len(set(cameras)) != len(cameras) or any(not 0 <= c <= 9 for c in cameras):
+        raise ValueError("Elige entre 1 y 4 cámaras distintas (índices de mocap_cameras)")
+    if not 1 <= seconds <= 120 or not 5 <= fps <= 60 or purpose not in ("motion", "calibration"):
+        raise ValueError("seconds 1-120, fps 5-60 y purpose motion o calibration")
+    if (width, height) not in ((640, 480), (1280, 720), (1920, 1080)):
+        raise ValueError("Resolución: 640×480, 1280×720 o 1920×1080")
+    folder = _mocap_take(take, create=True)
+    return _mocap_start(folder, "record", ["--cameras", ",".join(map(str, cameras)), "--seconds", str(seconds),
+                                           "--fps", str(fps), "--width", str(width), "--height", str(height),
+                                           "--purpose", purpose])
+
+
+@mcp.tool()
+def mocap_calibrate(take: str = "", method: str = "charuco", square_mm: float = 0, marker_mm: float = 0,
+                    subject_height_m: float = 1.70, fov_degrees: float = 60.0, from_take: str = "") -> dict[str, Any]:
+    """Calibrate the cameras of a motion-capture take (background; poll mocap_status).
+
+    charuco: the board videos in calib/ (or videos/) give each camera's lens and
+    position; square_mm/marker_mm override the printed sizes (0 = board defaults).
+    body: without a board, from the person's own landmarks in videos/ (focal from
+    fov_degrees, metric scale from subject_height_m, about ±5 %). from_take: reuse
+    another take's calibration when the cameras have not moved (immediate).
+    """
+    folder = _mocap_take(take)
+    if from_take:
+        source = _mocap_take(from_take) / "calibration.json"
+        if not source.is_file():
+            raise FileNotFoundError(f"{from_take} no tiene calibración")
+        data = json.loads(source.read_text(encoding="utf-8"))
+        data["copied_from"] = from_take
+        (folder / "calibration.json").write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+        return _mocap_summary(folder)
+    if method not in ("charuco", "body"):
+        raise ValueError("method: charuco o body")
+    if not 1.0 <= subject_height_m <= 2.3 or not 30 <= fov_degrees <= 120:
+        raise ValueError("subject_height_m 1,0-2,3 y fov_degrees 30-120")
+    arguments = ["--method", method, "--height", str(subject_height_m), "--fov", str(fov_degrees)]
+    if square_mm:
+        arguments += ["--square-mm", str(square_mm)]
+    if marker_mm:
+        arguments += ["--marker-mm", str(marker_mm)]
+    return _mocap_start(folder, "calibrate", arguments)
+
+
+@mcp.tool()
+def mocap_process(take: str = "", videos: list[str] = [], model: str = "full", smoothing: str = "butterworth",
+                  cutoff_hz: float = 6.0, subject_height_m: float = 1.70, fov_degrees: float = 60.0,
+                  auto_calibrate: bool = True, check_video: bool = True) -> dict[str, Any]:
+    """Turn 1-4 videos of a person into a 3D skeleton, BVH, animated GLB and a check video (background).
+
+    One video: monocular 3D pose (MediaPipe metric body, placed with the camera's
+    field of view). Two to four: triangulation with the take's calibration; with
+    none and auto_calibrate, it calibrates from the body first. Then gap filling
+    and smoothing: Butterworth (cutoff_hz), Savitzky-Golay or none. videos: absolute
+    paths of existing files to copy into a new take (camera order = list order);
+    otherwise the take's videos/. model: lite, full or heavy. Poll mocap_status.
+    """
+    if model not in ("lite", "full", "heavy") or smoothing not in ("butterworth", "savgol", "none"):
+        raise ValueError("model lite/full/heavy y smoothing butterworth/savgol/none")
+    if not 1 <= cutoff_hz <= 15 or not 1.0 <= subject_height_m <= 2.3 or not 30 <= fov_degrees <= 120:
+        raise ValueError("cutoff_hz 1-15, subject_height_m 1,0-2,3 y fov_degrees 30-120")
+    if videos:
+        if not 1 <= len(videos) <= 4:
+            raise ValueError("Entre 1 y 4 vídeos")
+        sources = [Path(v) for v in videos]
+        for source in sources:
+            if not source.is_absolute() or not source.is_file():
+                raise FileNotFoundError(f"No existe el vídeo {source}")
+        folder = _mocap_take(take, create=True)
+        target = folder / "videos"
+        if _mocap_videos(target):
+            raise ValueError("La toma ya tiene vídeos; deja take vacío para crear una nueva")
+        target.mkdir(exist_ok=True)
+        import shutil
+        for k, source in enumerate(sources):
+            shutil.copy2(source, target / f"cam{k}{source.suffix.lower()}")
+    else:
+        folder = _mocap_take(take)
+    if not _mocap_videos(folder / "videos"):
+        raise FileNotFoundError("La toma no tiene vídeos; graba con mocap_record o sube vídeos")
+    arguments = ["--model", model, "--filter", smoothing, "--cutoff", str(cutoff_hz), "--height", str(subject_height_m),
+                 "--fov", str(fov_degrees)]
+    if not auto_calibrate:
+        arguments.append("--no-auto-calibrate")
+    if not check_video:
+        arguments.append("--no-video")
+    return _mocap_start(folder, "process", arguments)
+
+
+@mcp.tool()
+def mocap_status(take: str = "") -> dict[str, Any]:
+    """State of a motion-capture take: videos, recording/calibration/processing progress, results and file paths."""
+    return _mocap_summary(_mocap_take(take))
+
+
+@mcp.tool()
+def mocap_list() -> list[dict[str, Any]]:
+    """Motion-capture takes, newest first, with their videos, calibration and whether they are processed."""
+    rows = []
+    for folder in _mocap_takes():
+        rows.append({"take": folder.name, "videos": len(_mocap_videos(folder / "videos")),
+                     "calibration_videos": len(_mocap_videos(folder / "calib")),
+                     "calibrated": (folder / "calibration.json").is_file(),
+                     "processed": (folder / "motion.bvh").is_file(),
+                     "state": next((s["state"] for s in (_mocap_job_state(folder, k) for k in MOCAP_JOBS)
+                                    if s["state"] == "running"), "idle")})
+    return rows
+
+
+@mcp.tool()
+def mocap_export(take: str = "", destination: str = "files", target_path: str = "", target_id: int = 0) -> dict[str, Any]:
+    """Exports of a processed take: files (paths of JSON, CSV, BVH, GLB and check video), or send the animated GLB to
+    Vulcan's Hoard: vulcan_fbx (FBX for Unity/Mixamo, verified by Blender) or vulcan_retarget (onto the rig in
+    target_path or Vulcan library model target_id)."""
+    folder = _mocap_take(take)
+    glb = folder / "motion.glb"
+    if not glb.is_file():
+        raise FileNotFoundError("La toma no está procesada; usa mocap_process")
+    files = {name: str(folder / name) for name in MOCAP_FILES if (folder / name).is_file()}
+    if destination == "files":
+        return {"take": folder.name, "files": files,
+                "urls": {name: _mocap_url(folder, name) for name in files}}
+    if destination not in ("vulcan_fbx", "vulcan_retarget"):
+        raise ValueError("destination: files, vulcan_fbx o vulcan_retarget")
+    from hoard_link import family
+    if not family.status().get("app"):
+        family.configure("kinect-hoard", str(ROOT / "data"))
+    if destination == "vulcan_fbx":
+        answer = family.call("vulcan", "anim_fbx_export", {"path": str(glb)}, timeout=900)
+    else:
+        if not target_path and not target_id:
+            raise ValueError("Indica target_path (GLB/glTF/FBX con esqueleto) o target_id de la biblioteca de Vulcan")
+        arguments: dict[str, Any] = {"source_path": str(glb)}
+        if target_path:
+            arguments["target_path"] = target_path
+        else:
+            arguments["target_id"] = target_id
+        answer = family.call("vulcan", "anim_retarget", arguments, timeout=900)
+    return {"take": folder.name, "destination": destination, "source": str(glb), "ok": answer.get("ok"),
+            "vulcan": answer.get("result", answer.get("error"))}
+
+
 @mcp.resource("kinect-hoard://capabilities")
 def capabilities_resource() -> str:
     """Machine-readable capability catalog and validation status."""
