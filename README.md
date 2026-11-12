@@ -1,132 +1,127 @@
 # Kinect Hoard
 
-Estudio local para explorar, depurar y reutilizar capacidades Kinect. Detecta Kinect 360 y Kinect One con una API de cámara común, catálogo documentado y servidor MCP para agentes que necesiten consultar el código o integrar una función en otra aplicación. La One conectada en este equipo ha entregado RGB, profundidad, infrarrojos, infrarrojos de larga exposición, índice corporal, esqueleto de una persona real, rostro 2D y HD, gestos y nubes y mallas PLY con y sin color registrado. El recorte de fondo conservó a una persona real, aunque mostró huecos visibles en la máscara.
+Estudio local para explorar, grabar y reutilizar las capacidades de Kinect One y Kinect 360 desde una API de cámara común.
 
-## Ejecutar
+![Icono de Kinect Hoard](app-icon.png)
 
-Para **Captura de movimiento** con webcams o vídeos, ejecuta `setup-mocap.ps1` y abre el modo desde el estudio. Una cámara estima la pose 3D. Con varias, calibra las vistas con un tablero ChArUco o con los puntos del cuerpo. El resultado se puede exportar a BVH, GLB animado, JSON y CSV. La prueba sintética de dos cámaras verifica la calibración, los formatos y su importación en Blender.
+## Qué es
 
-Desde **Hoard Hub**, abre **Kinect Hoard**. Su interfaz usa el tema compartido de
-la familia, el acceso común a Faustus y el mismo catálogo de herramientas que MCP.
-Arranca bajo demanda: abrir la interfaz no enciende el sensor. La portada ofrece
-los diez [modos del estudio](docs/workspace.md), con las 26 capacidades y sus
-referencias: cámara; cuerpo, esqueleto y avatar; escáner; rostro; audio y voz;
-gestos e interacción; geometría; grabación y reproducción; integraciones; sensores.
-Cada modo tiene acciones reales y su código. Blender recibe un armature en directo
-y puede grabar keyframes. La salida limpia sirve como fuente Navegador para OBS.
-**Conectar cámara** abre la vista previa y **Iniciar escaneo** comienza a integrar.
+Kinect Hoard detecta los dos modelos de Kinect, los abre bajo demanda y ofrece sus flujos, el seguimiento corporal, el escaneo 3D, el rostro, el audio y los gestos como funciones que se pueden usar desde una interfaz web, desde una aplicación de escritorio, desde la línea de comandos o desde agentes por MCP. Cada capacidad lleva un catálogo documentado con su código propio, pensado para adaptarlo a otra aplicación.
 
-Dentro del escáner, el flujo inicial es **One · Cámara fija · Persona**. La máscara corporal separa
-el fondo; la superficie con color crece en directo y **Finalizar y texturizar**
-exporta OBJ, MTL y PNG. En directo, la pose sale de un ICP con color contra las
-vistas clave sobre el sujeto enmascarado, con recolocación, descarte de brazos
-que se mueven y cierre de la vuelta con grafo de poses (rehace el volumen al
-corregir en un segundo volumen, repartido entre fotogramas); con la persona
-sintética reproducida al ritmo real da 0,56° RMS de rotación a 10 fps y 0,83° a
-30 fps (35,5° el seguidor SIFT anterior), 11 ms de seguimiento por fotograma y
-el 91 % de los fotogramas dentro de 33 ms a 30 fps.
-**Reproducir como en directo** pasa una toma guardada o la persona sintética por
-ese mismo motor al ritmo de sus marcas de tiempo y la mide (también MCP
-`replay_live_capture`). **Refinar una toma** vuelve a procesar cualquier toma
-guardada sin abrir la cámara: separa al sujeto del suelo y del fondo, lo sigue con
-ICP con color de grueso a fino, cierra la vuelta completa con un grafo de poses,
-descarta en cada vista los brazos o manos que se movieron y exporta
-`refined.obj` con atlas, junto a una tabla nativo/refinado con las mismas
-máscaras. Con una persona sintética girando con los brazos en movimiento, el error
-de rotación del refinado es 2,0° RMS, y la superficie queda a 0,8 mm de mediana
-de la verdad. El giro natural completo
-de una persona real **todavía no está validado** (prueba física en
-`PENDIENTES.md`) y no hay campo de deformación para cambios grandes de postura.
-Consulta [escáner en directo](docs/live-scanner.md) para los controles,
-las salidas reales y las limitaciones. La aplicación nativa y sus herramientas
-anteriores siguen disponibles con el comando de abajo.
+También incluye un modo de captura de movimiento con webcams o vídeos, que no necesita Kinect.
 
-En PowerShell, desde esta carpeta:
+## Qué hace
 
-```powershell
-.\run.ps1
-```
+**Cámara**
+- Color RGB, profundidad, infrarrojos, infrarrojos de larga exposición, índice corporal y color registrado sobre profundidad (los tres últimos según modelo; larga exposición, índice corporal y «sin fondo» son de la One).
+- Vista de las dos cámaras a la vez, cada una con su propia reconexión.
+- Recuperación automática del flujo cuando Windows vuelve a enumerar el sensor tras un corte USB.
+- Salida limpia (`/camera-output`) utilizable como fuente Navegador en OBS.
 
-La aplicación muestra ambos modelos, su estado USB y la disponibilidad de la cámara. Al iniciar selecciona el modelo conectado y espera a que reaparezca si Windows lo está reconectando. El selector implementa **Color RGB**, **Profundidad**, **Infrarrojos** y **Color registrado sobre profundidad** para ambos módulos. **Esqueleto** está verificado con One; el backend SDK 1.8 de la 360 lo implementa, pero ese SDK no reconoce esta cámara en Windows 11. **IR larga exposición**, **Índice corporal** y **Sin fondo** son funciones de la One. El panel derecho permite recorrer capacidades, muestras originales, estado real de validación y documentación. `Guardar PNG` exporta la vista, `Guardar datos` guarda PGM de 16 bits o articulaciones JSON según el flujo, y `Nube PLY` exporta puntos 3D cuando está abierta la profundidad. Los cuatro flujos de cámara de la 360 se han capturado físicamente mediante su controlador nativo.
+**Cuerpo, avatar y gestos**
+- Esqueleto de la One, avatar 2D, coordenadas cámara/profundidad y eliminación de fondo.
+- Motor de gestos, con las demos ShapeGame y TicTacToe jugables con la mano.
+- Envío de articulaciones en directo a un armature de Blender, con grabación de keyframes.
 
-El menú **Sesión** graba diez segundos del flujo abierto y reproduce el archivo `.khr` sin Kinect. También permite abrirlo en pausa y avanzar fotograma a fotograma para depurar avatar, gestos y AdaptiveUI. La sesión conserva la imagen, los valores crudos y las articulaciones disponibles. Véase [formato y comandos](docs/session.md).
+**Escáner 3D**
+- Escáner en directo con flujo inicial **One · Cámara fija · Persona**: la máscara corporal separa el fondo y la superficie con color crece en directo. Seguimiento por ICP con color contra vistas clave, recolocación, descarte de brazos que se mueven y cierre de la vuelta con grafo de poses.
+- **Finalizar y texturizar** exporta OBJ, MTL y atlas PNG.
+- **Reproducir como en directo**: pasa una toma guardada o una persona sintética por el mismo motor, al ritmo de sus marcas de tiempo, y mide el resultado.
+- **Refinar una toma**: reprocesa una toma guardada sin abrir la cámara y devuelve `refined.obj` con una tabla de métricas nativo/refinado.
+- Escáner con textura de captura corta (`--quality`) que exporta OBJ + MTL + PNG, PLY e informe.
+- Reconstrucción Fusion (TSDF en color) de sesiones RGBD, con límite de profundidad y región de interés.
+- Escaneo dual One + 360 con calibración a partir de puntos 3D correspondientes.
+- Nube de puntos y malla PLY de una toma, con y sin color; visor de mallas integrado.
 
-Para generar una captura sin la interfaz:
+**Rostro, audio y voz**
+- Detector de rostro frontal 2D, seguimiento facial HD (puntos, orientación y malla) y captura de cara 3D.
+- Grabación de audio WAV con metadatos de dirección del haz.
+- Reconocimiento de comandos con el reconocedor local de Windows y una gramática editable (`speech-commands.txt`).
 
-```powershell
-& '.\KinectHoard.App\bin\Release\net48\KinectHoard.App.exe' --capture '.\captura.png' Color
-```
+**Captura de movimiento**
+- Pose 3D con una o varias webcams o vídeos; con varias cámaras se calibran las vistas con un tablero ChArUco o con puntos del cuerpo.
+- Exporta BVH, GLB animado, JSON y CSV.
 
-El tercer argumento puede ser `Depth`, `Infrared`, `LongExposureInfrared`, `BodyIndex`, `Skeleton`, `BackgroundRemoved` o `ColorDepth` (RGB registrado sobre profundidad). Para exportar valores originales de 16 bits, usa `--capture-raw '.\profundidad.pgm' Depth`. `--bodies '.\bodies.json'` exporta articulaciones; `--point-cloud`, `--mesh`, `--color-cloud` y `--color-mesh` exportan geometría PLY. `--record '.\sesion.khr' 10 Depth` graba una sesión y `--replay-last '.\sesion.khr' '.\ultimo.png'` reproduce su último fotograma. Para elegir la 360 en CLI se usan `--capture-model 360 archivo.png ColorDepth`, `--capture-raw-model 360 archivo.pgm Depth`, `--record-model 360 archivo.khr 10 ColorDepth`, `--point-cloud-model 360 archivo.ply`, `--mesh-model 360 archivo.ply`, `--color-cloud-model 360 archivo.ply` y `--color-mesh-model 360 archivo.ply`. El esqueleto y `--bodies-model 360` requieren que funcione el SDK 1.8, que no reconoce este sensor en este equipo. `--audio-record '.\audio.wav' 10` intenta capturar el micrófono de One y devuelve error si no hay muestras. `--diagnose '.\diagnostico.txt'` escribe el estado USB y de los dos controladores, incluidos errores de PnP. Las capturas PNG/PGM esperan hasta 25 segundos y vuelven a intentarlo tras un corte USB.
+**Sesiones y herramientas**
+- Grabación de sesiones `.khr` y reproducción sin sensor, con pausa y avance fotograma a fotograma.
+- Servidor HTTP local con puentes de ejemplo para OpenCV (RGB y profundidad cruda) y MATLAB.
+- Diagnóstico de cortes USB y de audio (`diagnose-usb.ps1`, `diagnose-audio.ps1`).
 
-## Paquete para usar Kinect One
+El [catálogo](docs/capabilities.json) indica para cada capacidad si está verificada, es parcial, solo entrega un flujo o está pendiente.
 
-`package.ps1` crea `KinectHoard-One.zip` con ejecutable, módulo de cámara, biblioteca facial, documentación, catálogo y MCP. Para usarlo en otro PC Windows x64, extrae el ZIP y abre `KinectHoard.App.exe`. Si falta Kinect Runtime 2.x, ejecuta `install-one-runtime.ps1` desde PowerShell: descarga el paquete **oficial de Microsoft**, comprueba su SHA-256 y solicita permisos de administrador para instalar el controlador. El sensor debe estar desconectado del USB durante esa instalación, como indica [Microsoft](https://www.microsoft.com/en-us/download/details.aspx?id=100067). El runtime puede llegar también mediante Windows Update. El ZIP incluye los archivos de Microsoft.Kinect.Face necesarios para la malla facial; el runtime y el controlador USB se instalan por separado.
+## Cómo ejecutarlo
 
-El ZIP está almacenado en **Git LFS** porque supera los 100 MB. Se puede [descargar directamente desde GitHub](https://github.com/Luissalet/Kinect-Hoard/raw/refs/heads/main/KinectHoard-One.zip) con el botón **Download raw file**, sin instalar Git LFS. Para obtenerlo desde un clon de GitHub, instala Git LFS y ejecuta `git lfs pull`; abrir el archivo puntero de Git como ZIP no funciona.
-
-El ZIP incluye `KinectHoard.Fusion.exe` y sus dependencias para reconstrucción 3D de sesiones RGBD de One o 360; no requiere instalar Python. Quien compile desde el código fuente puede ejecutar `setup-scan.ps1` para usar el script o `build-scan.ps1` para crear el ejecutable autónomo. Fusion acepta un límite de profundidad y una región de interés para aislar un objeto o cabeza próximos; esta ruta necesita aún un escaneo humano de varias vistas. La vista de cámara, grabación y exportación PLY de una toma funcionan sin Fusion.
-El nuevo [escáner con textura](docs/quality-scanner.md) añade `--quality` al mismo ejecutable y exporta **OBJ + MTL + atlas PNG**, además de PLY e informe. La UI ofrece una captura de 15 segundos para cualquiera de las dos cámaras. La One guarda en sesiones de calidad su color original de 1920×1080 y el mapa hacia profundidad; esa ampliación necesita aún validación física con One. La 360 produjo un OBJ texturizado real desde una escena estática, aunque la prueba se hizo con poca luz. La captura dual y fusión con extrínsecos medidos tienen CLI, UI y MCP; `--calibrate` calcula la matriz desde puntos 3D correspondientes. La fusión y el calibrador dual pasaron pruebas sintéticas; la captura física conjunta y su calibración real siguen pendientes.
-El menú **Geometría** permite ver y girar cualquier malla PLY exportada; al terminar Fusion, el visor se abre automáticamente.
-
-Para usar la cámara nativa 360 en Windows, `install-360-driver.ps1` comprueba el dispositivo `045E:02AE`, descarga Zadig firmado, verifica su SHA-256 y guía el cambio manual a `libusbK` solo para esa cámara. El script configura Zadig para mostrar dispositivos con controlador y preseleccionar `libusbK`; comprueba siempre que el ID USB sea `045E:02AE` antes de pulsar «Replace Driver». El motor y el audio 360 conservan sus controladores; la One no se modifica. En este equipo se completó el enlace y se validaron físicamente RGB, IR, profundidad y RGBD.
-
-El paquete aún no incorpora todas las demos del Developer Toolkit. El [catálogo](docs/capabilities.json) señala expresamente las funciones verificadas, las parciales, las que solo entregaron un flujo, las que compilan sin validación funcional y las pendientes. El [micrófono de One](docs/audio.md) entregó una grabación completa de 30 segundos y un monitor visual de nivel y haz en directo tras reconectar el USB, pero falta comprobar su estabilidad prolongada y calibrar la dirección del haz. La [demo de voz](docs/speech.md) reconoce comandos locales con una gramática editable. El [motor de gestos](docs/gestures.md) detectó una mano levantada real; ShapeGame y TicTacToe se jugaron con la mano derecha. Las [demos faciales](docs/face.md) localizaron un rostro RGB y capturaron puntos, orientación y malla HD; `FaceModelBuilder` recogió varias vistas reales, pero no completó el modelo personalizado. La [demo Fusion](docs/fusion.md) reconstruye sesiones RGBD en una malla TSDF, pero aún necesita una prueba real de varias vistas.
-
-## Documentación e integración con agentes
-
-- [Flujos y formatos](docs/camera.md), [cuerpo y articulaciones](docs/body.md), [eliminación de fondo](docs/background.md), [geometría](docs/geometry.md), [Fusion 3D](docs/fusion.md), [escáner OBJ con textura](docs/quality-scanner.md), [escaneo dual One + 360](docs/dual-scan.md), [rostro 2D y 3D](docs/face.md), [gestos](docs/gestures.md), [audio](docs/audio.md), [voz](docs/speech.md), [servidor local](docs/webserver.md), [grabación y reproducción](docs/session.md), [arquitectura](docs/architecture.md), [conflicto de controlador 360](docs/driver-360.md), [mapa del Toolkit](docs/toolkit-map.md), [inventario de las 56 muestras instaladas](docs/toolkit-inventory.md) y [contratos de las demos pendientes](docs/next-capabilities.md).
-- [MCP y Faustus](docs/mcp.md): ejecuta `setup-mcp.ps1` una vez para instalar el SDK MCP en `.venv` y conecta `faustus-plugin.json` con `KINECT_HOARD_DIR` apuntando a la carpeta de Hoard. El servidor ofrece catálogo, código permitido, diagnóstico y capturas locales. No adjunta datos de cámara automáticamente al modelo.
-- [Puentes externos](docs/webserver.md): `examples/opencv_live.py` consume RGB y `examples/opencv_raw.py` profundidad cruda desde la API local; ambos se probaron con la One. `examples/matlab_live.m` y `examples/matlab_depth.m` están preparados para RGB y matrices uint16, pero MATLAB no está instalado para probarlos.
-- [Privacidad](PRIVACY.md): qué datos se procesan, cuándo se guardan y qué interfaces locales pueden acceder a ellos.
-
-## Cortes USB y recuperación
-
-En el ASUS G513IH usado para probar la Kinect One, Windows registró el evento Kernel-PnP **1010**: `USB\VID_045E&PID_02C4` desapareció inesperadamente del bus durante la transmisión. Ocurrió también al abrir profundidad y RGB **directamente con el SDK oficial, sin Hoard**. En 35 segundos de prueba con Hoard y profundidad se registraron **2 pérdidas USB, 289 fotogramas y 3 aperturas del flujo**. Hoard recupera la transmisión cuando Windows vuelve a enumerar el sensor; no puede evitar que Windows pierda el dispositivo físico.
-
-Una segunda prueba de 15 segundos el 18 de octubre de 2026 obtuvo **155 fotogramas, una pérdida USB y dos aperturas**, con un evento 1010 correspondiente en Windows.
-
-Para repetir la medición:
+Requisitos: Windows, .NET Framework 4.8 y el SDK de .NET 9 para compilar; Kinect Runtime 2.x para la One (`install-one-runtime.ps1` descarga el instalador oficial de Microsoft y comprueba su SHA-256); para la 360 por la ruta nativa, el controlador `libusbK` en la cámara (`install-360-driver.ps1` guía el cambio con Zadig, comprobando que el ID sea `045E:02AE`).
 
 ```powershell
-.\diagnose-usb.ps1 -Stream Depth -Seconds 35
+.\build.ps1          # compila los módulos junto a KinectHoard.App.exe
+.\run.ps1            # aplicación de escritorio
 ```
 
-El script relaciona los cortes observados por la aplicación con los eventos 1010 de Windows. Antes de cambiar controladores o la configuración de energía conviene comprobar cable USB 3, adaptador de corriente y compatibilidad del controlador USB 3. Microsoft pide un [controlador USB 3 dedicado, concentrador de alimentación y cableado correctos](https://www.microsoft.com/en-us/download/details.aspx?id=100067). El corte medido sucede con el sensor transmitiendo, así que no hay evidencia suficiente para atribuirlo a la suspensión selectiva de USB.
+- **Interfaz web:** desde Hoard Hub se abre **Kinect Hoard**, o se lanza `hoard_server.py`; escucha en `http://127.0.0.1:64321` (salud en `/api/health`). Abrir la interfaz no enciende el sensor: **Conectar cámara** abre la vista previa y **Iniciar escaneo** comienza a integrar.
+- **Escáner con Fusion:** `setup-scan.ps1` (script) o `build-scan.ps1` (ejecutable autónomo `KinectHoard.Fusion.exe`).
+- **Captura de movimiento:** `setup-mocap.ps1` y abrir el modo desde el estudio.
+- **Paquete para otro PC:** `package.ps1` genera `KinectHoard-One.zip` (almacenado en Git LFS) con ejecutable, módulo de cámara, biblioteca facial, documentación, catálogo y MCP; basta extraerlo en un Windows x64 y abrir `KinectHoard.App.exe`.
+- **Línea de comandos:**
 
-En Windows 11 conviene revisar **Configuración > Sistema > Sonido > Entrada > Varios micrófonos (Xbox NUI Sensor) > Mejoras de audio**. [Varios usuarios de Kinect v2 informaron](https://learn.microsoft.com/en-au/answers/questions/5609514/kinect-for-windows-11-has-broken-solve-found) de que desactivarlas terminó con sus reconexiones USB. En este equipo estaba activado **Voice Clarity**; se desactivó y `diagnose-audio.ps1` confirmó el cambio. Una retirada USB y una parada de RGB ocurrieron después. Al reconectar el USB en el mismo puerto con la alimentación conectada, volvieron a transmitir los siete flujos probados. RGB se mantuvo tres minutos con 2660 fotogramas y sin cortes; RGB y profundidad combinados entregaron 1914 y, en una prueba posterior, 1888 fotogramas durante tres minutos cada una, con una sola apertura y sin pérdidas USB. Falta medir la estabilidad durante horas. Las cifras y sus límites están en [mediciones de estabilidad](docs/usb-findings.md).
+```powershell
+KinectHoard.App.exe --capture captura.png Color          # Depth, Infrared, LongExposureInfrared, BodyIndex, Skeleton, BackgroundRemoved, ColorDepth
+KinectHoard.App.exe --capture-raw profundidad.pgm Depth  # valores originales de 16 bits
+KinectHoard.App.exe --bodies bodies.json                 # articulaciones
+KinectHoard.App.exe --point-cloud | --mesh | --color-cloud | --color-mesh   # geometría PLY
+KinectHoard.App.exe --record sesion.khr 10 Depth
+KinectHoard.App.exe --replay-last sesion.khr ultimo.png
+KinectHoard.App.exe --stress-dual prueba 60 Color Depth  # One y 360 en paralelo
+```
 
-## Arquitectura y límites actuales
+`--capture-model 360` elige la 360. Los detalles de cada opción están en [docs](docs/).
 
-- `KinectHoard.Core` define la API propia `ICameraBackend`, el formato común de fotograma BGRA y la detección USB sin SDK.
-- `KinectHoard.Driver.One` usa el runtime Kinect 2.0 presente en Windows para transmitir RGB, profundidad, infrarrojos, infrarrojos de larga exposición, índice corporal y esqueleto, además de convertir profundidad a nube de puntos.
-- `KinectHoard.Driver.ThreeSixty.Native` usa libfreenect/libusb para RGB, profundidad, infrarrojos y RGB registrado sobre profundidad de 360 sin SDK 1.8. El controlador nativo está compilado y validado con la cámara física `045E:02AE` enlazada a `libusbK`. Procesa eventos USB en un hilo continuo y proyecta la nube de puntos con la calibración de fábrica. El backend SDK 1.8 se conserva para instalaciones donde funcione. Véase [diagnóstico del controlador 360](docs/driver-360.md).
-- `KinectHoard.App` carga ambos módulos, muestra las demos y el catálogo documentado. Ejecuta cada controlador en su propio `AppDomain` porque los dos SDK publican el mismo nombre de ensamblado `Microsoft.Kinect`; en un único dominio, el runtime 2.0 sustituía erróneamente al 1.8. Al perder fotogramas durante 3 segundos, cierra el lector y vuelve a abrirlo cuando el dispositivo aparece en USB.
+## Conexión con Faustus y Hoard Hub
 
-La API común es nuestra. La One sigue dependiendo del runtime y controlador 2.0 de Microsoft; la ruta nativa de 360 evita el runtime 1.8 y necesita libusbK en la cámara. `build-native360.ps1` permite reconstruir sus DLL con fuentes fijadas. Cada backend se abre en un dominio .NET separado, de modo que ambos modelos pueden coexistir en el mismo proceso. El 19 de octubre se verificaron ambas vistas físicas en un sobremesa: 60 segundos de RGB simultáneo con 618 fotogramas One y 847 de 360, cero pérdidas USB y una apertura por sensor; otra prueba de RGBD simultáneo de 30 segundos obtuvo 219 y 374 fotogramas con las mismas condiciones. Las rutas nativas no proporcionan por sí solas todos los análisis corporales y faciales del Toolkit.
+El manifiesto `faustus-plugin.json` (id `kinect-hoard`) registra la app en Faustus y en Hoard Hub: el Hub la abre bajo demanda con el tema común y el acceso a Faustus, y publica sus herramientas por el contrato compartido `/api/agent/tools` y `/api/agent/call`. La portada presenta diez modos (cámara; cuerpo, esqueleto y avatar; escáner; rostro; audio y voz; gestos e interacción; geometría; grabación y reproducción; integraciones; sensores) con sus 26 capacidades, acciones y referencias; ver [modos](docs/workspace.md).
 
-El menú **Cámaras > Ver ambas a la vez** abre dos vistas independientes. Cada una permite elegir RGB, profundidad o IR y reintenta su propia conexión sin cerrar la otra. `--stress-dual '.\prueba-ambas' 60 Color Depth` abre One RGB y 360 profundidad en paralelo durante 60 segundos, y escribe `one.txt` y `360.txt` con fotogramas, reaperturas y cortes. El [escaneo dual](docs/dual-scan.md) captura dos sesiones y acepta una calibración medida para fusionarlas. La reconstrucción normaliza la orientación horizontal de One SDK y conserva su mapa hacia el RGB original. El visor OBJ carga los materiales y la textura. La primera reconstrucción humana dual sigue sin calidad aceptable: tiene huecos, artefactos y partes del fondo adheridas. La coexistencia USB no demuestra un escaneo limpio ni un busto completo.
+Servidor MCP (`mcp_server.py`, transporte `stdio`, sin puerto ni nube; se prepara una vez con `setup-mcp.ps1`, que fija `KINECT_HOARD_DIR`). Conectarse no abre ninguna cámara y las capturas de imagen y audio devuelven rutas locales sin adjuntar los medios. Herramientas por grupo:
 
-## Etapas de las demos del Developer Toolkit
+| Grupo | Herramientas |
+| --- | --- |
+| Catálogo y código | `list_capabilities`, `get_capability`, `read_hoard_source`, `list_modes`, `list_artifacts`, `open_studio`, `open_demo`, `sensor_status` |
+| Cámara | `start_camera`, `camera_status`, `get_live_frame`, `close_camera`, `capture_artifact` |
+| Escáner en directo | `start_live_scan`, `live_scan_status`, `control_live_scan`, `list_live_captures`, `refine_live_scan`, `refine_status`, `replay_live_capture`, `list_live_replays`, `replay_score` |
+| Reconstrucción | `scan_3d`, `scan_head`, `fuse_session`, `fuse_textured_sessions`, `calibrate_dual_landmarks` |
+| Rostro, audio, gestos | `analyze_face`, `capture_face3d`, `record_audio`, `recognize_speech`, `capture_gestures`, `analyze_gesture_session` |
+| Sesiones y Blender | `record_session`, `replay_session`, `session_info`, `connect_blender` |
+| Captura de movimiento | `mocap_cameras`, `mocap_snapshot`, `mocap_board`, `mocap_record`, `mocap_calibrate`, `mocap_process`, `mocap_status`, `mocap_list`, `mocap_export` |
+| Skills | `skills_list`, `skill_read` |
 
-El Toolkit 1.8 incluye demos de C#, C++ y VB, a menudo varias interfaces para la misma capacidad. La intención es integrar las **capacidades**, compartiendo la interfaz entre sensores, y adaptar las diferencias reales entre generaciones:
+El bloque `skills` del manifiesto nombra las skills de la biblioteca de la familia que encajan con la app: `depth-camera-capture` y `web-3d-asset-pipeline`. Más en [MCP y Faustus](docs/mcp.md).
 
-1. **Flujos de cámara:** color, profundidad, infrarrojos, infrarrojos de larga exposición e índice corporal de One implementados. RGB, profundidad, infrarrojos y RGBD registrado de 360 funcionan con la ruta nativa y `libusbK`; el esqueleto 360 sigue disponible solo mediante el SDK 1.8, que no reconoce este sensor en Windows 11.
-2. **Cuerpo e interacción:** esqueleto One con persona real, avatar 2D, coordenadas cámara/profundidad, eliminación de fondo y eventos de gestos implementados. El recorte se inspeccionó con persona y presentó huecos interiores. ShapeGame y TicTacToe se validaron con la mano derecha; avatar y AdaptiveUI se comprobaron con una sesión corporal humana (cabeza a 1,34 m, controles de tamaño cercano). Queda calibrar barridos, falsos disparos y los otros rangos de distancia. Los esqueletos de ambas generaciones tienen articulaciones y seguimiento distintos; la API común normalizará la parte compartida.
-3. **Audio y voz:** captura WAV y metadatos de dirección implementados para One; una grabación de 30 segundos quedó completa tras desactivar Voice Clarity y reconectar el USB. La gramática de comandos usa el reconocedor local de Windows; dos comandos sintetizados y reproducidos hacia el micrófono físico se reconocieron. Faltan pruebas con voces humanas, calibración de dirección y una prueba prolongada del micrófono.
-4. **Escaneo 3D y rostro:** nube y malla de una toma, Fusion TSDF color desde sesiones RGBD y detector de rostro frontal 2D implementados. El detector Haar localizó un rostro humano; el seguimiento facial HD produjo una malla real. Falta validar Fusion con movimiento de varias vistas y completar el modelo personalizado y el escaneo volumétrico de cabeza. Las demos originales de Fusion 1.8 no se pueden ejecutar sin cambios sobre Kinect One.
-5. **Herramientas y ejemplos de aplicación:** sesiones grabadas, reproducción offline, servidor HTTP local y galería de dos juegos implementados; faltan otros ejemplos de UI. Algunas herramientas como Kinect Studio son depuradores propios del SDK y se reimplementan como funciones de la aplicación, no como copias del ejecutable.
+## Estructura
 
-Una demo se marcará como compatible con una generación solo después de probarla con ese sensor físico. La Kinect 360 está conectada y su cámara usa `libusbK`: Hoard entrega RGB, profundidad, IR y RGBD registrado aunque el SDK 1.8 no entregue imágenes en este equipo. El [diagnóstico](docs/driver-360.md) incluye las mediciones y el corte USB observado.
+| Ruta | Contenido |
+| --- | --- |
+| `KinectHoard.Core` | API `ICameraBackend`, formato de fotograma BGRA y detección USB sin SDK |
+| `KinectHoard.Driver.One` | Backend de One sobre el runtime Kinect 2.0 |
+| `KinectHoard.Driver.ThreeSixty` / `.Native` | Backend de 360 por SDK 1.8 y ruta nativa libfreenect/libusb con `libusbK` |
+| `KinectHoard.App` | Estudio de escritorio (WinForms), CLI y catálogo; cada driver corre en su propio `AppDomain` |
+| `hoard_server.py`, `ui/` | Servidor web local y interfaz |
+| `mcp_server.py`, `faustus-plugin.json` | Servidor MCP y manifiesto |
+| `fusion.py`, `quality_scan.py`, `turn_refine.py`, `mocap.py` | Fusion, escáner con textura, refinado de tomas y captura de movimiento |
+| `docs/` | Documentación por capacidad y `capabilities.json` |
+| `tests/` | Pruebas de humo y sintéticas |
+| `captures/`, `data/` | Capturas y sesiones locales; token MCP |
+| `licenses/` | Textos de licencias de terceros |
 
-## Compilar
+## Desarrollo y pruebas
 
-Requiere Windows, .NET Framework 4.8 y el SDK .NET 9 instalado para `dotnet build`. Este equipo ya tiene las referencias 1.8 y 2.0 necesarias. Ejecuta `build.ps1`; los módulos quedan junto a `KinectHoard.App.exe` en `KinectHoard.App\bin\Release\net48`.
+Las pruebas están en `tests/` (por ejemplo `smoke_mcp.py`, `workspace-contract.py`, `live-replay.py`, `turn-refine-smoke.py`, `mocap-smoke.py`) y se ejecutan con el Python del entorno de la app. `build.ps1` compila; `build-native360.ps1` reconstruye las DLL nativas de la 360 desde fuentes fijadas.
 
-## Icono de la familia (2026-11-02)
+## Límites conocidos
 
-Dragon turquesa con sensor y figura corporal dorados. Cabecera, escaner y favicon usan app-icon.svg (PNG incrustado); el Hub usa app-icon.png y el ejecutable usa app-icon.ico con seis resoluciones. Arte final con ala corregida, sin cambios de funciones ni inicio de sensores.
+- El SDK 1.8 no reconoce la 360 en Windows 11; sus flujos (RGB, profundidad, infrarrojos y RGBD) se sirven por la ruta nativa. El esqueleto de la 360 solo existe por el SDK 1.8.
+- La One puede perder el USB durante la transmisión por el propio controlador de Windows; Hoard reabre el flujo, pero no evita el corte. Ver [mediciones](docs/usb-findings.md) y [driver 360](docs/driver-360.md).
+- El giro completo de una persona real y el escaneo dual limpio de un busto no están validados; no hay campo de deformación para cambios grandes de postura.
+- Quedan sin integrar algunas demos del Developer Toolkit ([contratos](docs/next-capabilities.md)).
 
-## Skills
+## Datos, privacidad y licencias
 
-The `skills` block of `faustus-plugin.json` names the procedures of the family's skill library that fit this app's work: `depth-camera-capture`, `web-3d-asset-pipeline`. The hub's Skills tab shows and changes them. This app does not hand them to connecting agents yet.
+Todo se procesa en local; las capturas, sesiones y audio se guardan en `captures/`. [PRIVACY.md](PRIVACY.md) detalla qué se procesa, cuándo se guarda y qué interfaces locales acceden. Licencias de terceros (OpenCV, OpenCvSharp, Open3D, libfreenect, libusb, xatlas) en [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) y `licenses/`.
