@@ -10,7 +10,7 @@ import urllib.request
 import bpy
 from mathutils import Matrix, Vector
 
-bl_info = {"name": "Kinect Hoard", "author": "Luissalet", "version": (1, 0, 0),
+bl_info = {"name": "Kinect Hoard", "author": "Kinect Hoard", "version": (1, 0, 0),
            "blender": (3, 6, 0), "location": "View3D > Sidebar > Kinect", "category": "Animation"}
 PAIRS = [("SpineBase", "SpineMid"), ("SpineMid", "SpineShoulder"), ("SpineShoulder", "Neck"), ("Neck", "Head")]
 for side in ("Left", "Right"):

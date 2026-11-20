@@ -45,7 +45,7 @@ Refinado sin cámara (05-11-2026): `turn_refine.py` y las herramientas
 **Refinar giro** y `/api/scanner/refine`) escriben `refined/` en cada toma con
 OBJ/MTL/PNG/PLY y `refine.json`. Persona sintética girando con brazos en
 movimiento: 2,0° RMS frente a 32,4° del seguimiento nativo, superficie a 0,8 mm
-de la verdad frente a 33 mm. Toma real de Luis: error de pose en pares de control
+de la verdad frente a 33 mm. Toma física de una persona: error de pose en pares de control
 1,1° frente a 11,3°, sin las 187 vistas sin sujeto que integraba el nativo.
 Fusion en directo recibe ya la imagen espejada que espera (antes su malla quedaba
 con X negada respecto a las poses); `live.scan.json` marca
