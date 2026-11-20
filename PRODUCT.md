@@ -5,10 +5,9 @@
 Kinect Hoard is a menu of working Kinect modes and reusable reference implementations,
 not a scanner-only landing page. Camera, body/avatar/Blender, scanner, face,
 audio/voice, gestures/games, geometry, recording/replay, bridges and diagnostics
-must all remain visible, with executable operations and shared MCP tools. Luis asked for
-a scanner with real-time growing textured mesh, movable camera and fixed camera
+must all remain visible, with executable operations and shared MCP tools. The scanner supports real-time growing textured mesh, movable camera and fixed camera
 modes. Current priority is One fixed on a tripod, with a person turning naturally.
-He rejected earlier voxelated, split, artifact-filled busts; quality is not accepted.
+Earlier voxelated, split and artifact-filled busts did not meet the quality target.
 
 ## Platform
 web
@@ -18,7 +17,7 @@ scanner remain available. A native x64 process owns camera and Fusion; Python
 publishes the same operations through stdio MCP and the common HTTP agent contract.
 
 ## Users and work
-Luis operates camera preview, starts, pauses and finishes scans, inspects the
+Camera operators use the preview, starts, pauses and finishes scans, inspects the
 colored surface and exports OBJ/MTL/PNG. Faustus and other agents use the same
 capabilities. Opening the interface, catalogue or MCP must not start a camera.
 The top-level catalogue covers all 26 documented capabilities. A logo identifies

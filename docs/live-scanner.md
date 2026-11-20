@@ -244,14 +244,14 @@ Resultados medidos el 05-11-2026:
 | --- | --- | --- | --- |
 | Persona sintética girando 1,12 vueltas, brazos ±12°, 132 vistas (verdad conocida) | Error de rotación RMS / máx. / final | 32,4° / 56,5° / 6,0° | 2,0° / 7,7° / 1,6° |
 | | Superficie: mediana a la verdad / completitud a 1 cm | 33,4 mm / 44 % | 0,8 mm / 82 % |
-| Toma real One, Luis girando (296 vistas, 187 sin sujeto) | Error de pose en pares de control (mediana / p90) | 11,3° / 23,1° | 1,1° / 11,0° |
+| Toma física con One, persona girando (296 vistas, 187 sin sujeto) | Error de pose en pares de control (mediana / p90) | 11,3° / 23,1° | 1,1° / 11,0° |
 | | Solape a 1 cm en pares de control | 36 % | 87 % |
 | | Error al cerrar la vuelta (mediana, antes → después del grafo) | — | 1,5° → 0,3° |
 | | Residuo malla–profundidad (mediana) / piezas | 820 mm (pared integrada) / 7831 | 3,3 mm / 1 |
 | | Vistas integradas sin sujeto | 187 | 0 |
 | Silla 360 estática (78 vistas) | Residuo malla–profundidad (mediana) | 7,1 mm (1,7 mm con X corregida) | 0,9 mm |
 
-La toma real de persona no contiene una vuelta completa: Luis estaba a
+La toma real de persona no contiene una vuelta completa: la persona estaba a
 0,6–0,75 m, fuera del encuadre en gran parte de la toma y la máscara antigua
 saltó a la pared. Sirve para medir el seguimiento, no para acreditar un busto
 de 360°. La prueba física pendiente está en `PENDIENTES.md`.
