@@ -1,4 +1,12 @@
 {
+  "x-family": {
+    "isolated_instance": {
+      "unsupported": {
+        "en": "The launcher uses a fixed port and a shared capture directory and camera runtime.",
+        "es": "El lanzador usa un puerto fijo y comparte la carpeta de capturas y el servicio de cámara."
+      }
+    }
+  },
   "schema": 1,
   "id": "kinect-hoard",
   "name": "Kinect Hoard",
